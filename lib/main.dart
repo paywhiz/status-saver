@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,12 +14,33 @@ import 'features/recent/recent_controller.dart';
 import 'features/saved/saved_controller.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const _Bootstrap());
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      debugPrint('FlutterError: ${details.exceptionAsString()}');
+    };
+
+    StatusRepository repo;
+    try {
+      repo = Platform.isAndroid
+          ? AndroidStatusSource()
+          : NullStatusRepository();
+    } catch (e, st) {
+      debugPrint('Repo init failed: $e\n$st');
+      repo = NullStatusRepository();
+    }
+
+    runApp(_Bootstrap(repo: repo));
+  }, (error, stack) {
+    debugPrint('Uncaught zone error: $error\n$stack');
+  });
 }
 
 class _Bootstrap extends StatefulWidget {
-  const _Bootstrap();
+  const _Bootstrap({required this.repo});
+
+  final StatusRepository repo;
 
   @override
   State<_Bootstrap> createState() => _BootstrapState();
@@ -25,13 +48,11 @@ class _Bootstrap extends StatefulWidget {
 
 class _BootstrapState extends State<_Bootstrap> {
   late final SavedStore _saved = SavedStore();
-  late final StatusRepository _repo =
-      Platform.isAndroid ? AndroidStatusSource() : NullStatusRepository();
   IosShareIngest? _iosIngest;
 
   late final SavedController _savedController = SavedController(_saved);
   late final RecentController _recentController = RecentController(
-    repo: _repo,
+    repo: widget.repo,
     savedStore: _saved,
   );
 
