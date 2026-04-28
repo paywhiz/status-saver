@@ -13,6 +13,12 @@ abstract class StatusRepository {
   /// Initiate the platform-specific permission / setup flow.
   Future<bool> requestSetup();
 
+  /// True when secondary (WhatsApp Business) access has been granted.
+  Future<bool> hasSecondarySetup();
+
+  /// Initiate the secondary (WhatsApp Business) folder setup flow.
+  Future<bool> requestSecondarySetup();
+
   /// All recent statuses across Messenger + Business, newest first.
   Future<List<StatusItem>> listRecent();
 
@@ -28,6 +34,12 @@ class NullStatusRepository implements StatusRepository {
 
   @override
   Future<bool> requestSetup() async => true;
+
+  @override
+  Future<bool> hasSecondarySetup() async => true;
+
+  @override
+  Future<bool> requestSecondarySetup() async => true;
 
   @override
   Future<List<StatusItem>> listRecent() async => const [];

@@ -1,7 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:saf_util/saf_util.dart';
-import 'package:saf_util/saf_util_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'status_item.dart';
@@ -10,6 +11,14 @@ import 'status_repository.dart';
 const _prefKeyMessenger = 'saf.uri.whatsapp';
 const _prefKeyBusiness = 'saf.uri.whatsapp_business';
 
+const _waStatusesInitialUri =
+    'content://com.android.externalstorage.documents/tree/'
+    'primary%3AAndroid%2Fmedia%2Fcom.whatsapp%2FWhatsApp%2FMedia%2F.Statuses';
+
+const _wabStatusesInitialUri =
+    'content://com.android.externalstorage.documents/tree/'
+    'primary%3AAndroid%2Fmedia%2Fcom.whatsapp.w4b%2FWhatsApp%20Business%2FMedia%2F.Statuses';
+
 /// Reads WhatsApp / WhatsApp Business `.Statuses` directories on Android via
 /// the Storage Access Framework. The user grants directory access once;
 /// the URI is persisted across launches.
@@ -17,6 +26,8 @@ class AndroidStatusSource implements StatusRepository {
   AndroidStatusSource({SafUtil? saf}) : _saf = saf ?? SafUtil();
 
   final SafUtil _saf;
+
+  static const _channel = MethodChannel('com.example.status_saver/saf');
 
   @override
   Future<bool> isReady() async {
@@ -27,21 +38,26 @@ class AndroidStatusSource implements StatusRepository {
   }
 
   @override
-  Future<bool> requestSetup() async {
-    final granted = await pickMessengerFolder();
-    // Business folder is optional — many users don't have WhatsApp Business.
-    await pickBusinessFolder();
-    return granted || (await prefs).getString(_prefKeyBusiness) != null;
-  }
+  Future<bool> requestSetup() => pickMessengerFolder();
+
+  @override
+  Future<bool> hasSecondarySetup() async =>
+      (await prefs).getString(_prefKeyBusiness) != null;
+
+  @override
+  Future<bool> requestSecondarySetup() => pickBusinessFolder();
 
   Future<SharedPreferences> get prefs async =>
       SharedPreferences.getInstance();
 
-  Future<bool> pickMessengerFolder() => _pick(_prefKeyMessenger);
-  Future<bool> pickBusinessFolder() => _pick(_prefKeyBusiness);
+  Future<bool> pickMessengerFolder() => _pick(_prefKeyMessenger, _waStatusesInitialUri);
+  Future<bool> pickBusinessFolder() => _pick(_prefKeyBusiness, _wabStatusesInitialUri);
 
-  Future<bool> _pick(String key) async {
-    final result = await _saf.pickDirectory(persistablePermission: true);
+  Future<bool> _pick(String key, String initialUri) async {
+    final result = await _saf.pickDirectory(
+      persistablePermission: true,
+      initialUri: initialUri,
+    );
     if (result == null) return false;
     final p = await prefs;
     await p.setString(key, result.uri);
@@ -105,14 +121,7 @@ class AndroidStatusSource implements StatusRepository {
       if (f != null) return f.readAsBytes();
       throw StateError('Item has neither uri nor file');
     }
-    // saf_util has no readFileBytes(); we open a file descriptor via SAF and
-    // read through the Linux /proc/self/fd virtual filesystem — the standard
-    // trick for reading content:// URIs on Android without a platform channel.
-    final fd = await _saf.getFileDescriptor(uri);
-    try {
-      return await File('/proc/self/fd/$fd').readAsBytes();
-    } finally {
-      await _saf.closeFileDescriptor(fd);
-    }
+    final bytes = await _channel.invokeMethod<Uint8List>('readBytes', {'uri': uri});
+    return bytes ?? (throw StateError('readBytes returned null for $uri'));
   }
 }

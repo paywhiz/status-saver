@@ -44,8 +44,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'You can grant a second folder for WhatsApp Business after '
-              'the first one is set up.',
+              'After setup, you can also add WhatsApp Business statuses '
+              'from the Recent screen.',
               style: TextStyle(color: Colors.black54, fontSize: 12),
             ),
           ],

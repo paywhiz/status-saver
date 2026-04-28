@@ -47,6 +47,12 @@ class _RecentPageState extends State<RecentPage>
           tabs: const [Tab(text: 'Images'), Tab(text: 'Videos')],
         ),
         actions: [
+          if (!c.hasSecondarySetup)
+            IconButton(
+              icon: const Icon(Icons.add_business),
+              tooltip: 'Add WhatsApp Business',
+              onPressed: () => context.read<RecentController>().setupBusiness(),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: c.loading ? null : c.refresh,
