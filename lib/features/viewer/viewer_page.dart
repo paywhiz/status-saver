@@ -100,6 +100,7 @@ class _ActionBarState extends State<_ActionBar> {
   Future<Uint8List> _bytes() async {
     final f = widget.item.file;
     if (f != null) return f.readAsBytes();
+    // Capture context reference before async gap.
     final recent = context.read<RecentController>();
     final list = await recent.readBytes(widget.item);
     return list is Uint8List ? list : Uint8List.fromList(list);
@@ -117,11 +118,13 @@ class _ActionBarState extends State<_ActionBar> {
 
   Future<void> _save() async {
     setState(() => _busy = true);
+    // Capture controllers before any async gap.
+    final recent = context.read<RecentController>();
+    final savedCtrl = context.read<SavedController>();
     try {
-      final recent = context.read<RecentController>();
       await recent.saveToLibrary(widget.item);
       if (mounted) {
-        await context.read<SavedController>().refresh();
+        await savedCtrl.refresh();
         _toast('Saved');
       }
     } finally {
@@ -133,17 +136,19 @@ class _ActionBarState extends State<_ActionBar> {
     setState(() => _busy = true);
     try {
       final ok = await Permissions().ensureGallerySave();
+      if (!mounted) return;
       if (!ok) {
         _toast('Permission denied');
         return;
       }
       final bytes = await _bytes();
+      if (!mounted) return;
       final saved = await MediaSaver().saveBytesToGallery(
         bytes: bytes,
         name: widget.item.displayName ?? 'status',
         kind: widget.item.kind,
       );
-      _toast(saved ? 'Added to gallery' : 'Save failed');
+      if (mounted) _toast(saved ? 'Added to gallery' : 'Save failed');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -161,12 +166,15 @@ class _ActionBarState extends State<_ActionBar> {
 
   Future<void> _delete() async {
     setState(() => _busy = true);
+    // Capture before async gaps.
+    final savedCtrl = context.read<SavedController>();
+    final navigator = Navigator.of(context);
     try {
-      final saved = SavedStore();
-      await saved.delete(widget.item);
+      final store = SavedStore();
+      await store.delete(widget.item);
       if (mounted) {
-        await context.read<SavedController>().refresh();
-        Navigator.of(context).pop();
+        await savedCtrl.refresh();
+        navigator.pop();
       }
     } finally {
       if (mounted) setState(() => _busy = false);

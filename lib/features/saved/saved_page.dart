@@ -72,7 +72,7 @@ class _SavedPageState extends State<SavedPage>
   }
 
   Future<void> _importFromFiles() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.media,
     );

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:saf_util/saf_util.dart';
 import 'package:saf_util/saf_util_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -103,10 +105,14 @@ class AndroidStatusSource implements StatusRepository {
       if (f != null) return f.readAsBytes();
       throw StateError('Item has neither uri nor file');
     }
-    final bytes = await _saf.readFileBytes(uri);
-    if (bytes == null) {
-      throw StateError('SAF read returned null for $uri');
+    // saf_util has no readFileBytes(); we open a file descriptor via SAF and
+    // read through the Linux /proc/self/fd virtual filesystem — the standard
+    // trick for reading content:// URIs on Android without a platform channel.
+    final fd = await _saf.getFileDescriptor(uri);
+    try {
+      return await File('/proc/self/fd/$fd').readAsBytes();
+    } finally {
+      await _saf.closeFileDescriptor(fd);
     }
-    return bytes;
   }
 }

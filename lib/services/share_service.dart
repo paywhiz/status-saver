@@ -10,6 +10,6 @@ class ShareService {
     if (f == null) {
       throw ArgumentError('share() needs a real File on disk');
     }
-    await Share.shareXFiles([XFile(f.path)]);
+    await SharePlus.instance.share(ShareParams(files: [XFile(f.path)]));
   }
 }
