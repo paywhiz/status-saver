@@ -17,10 +17,12 @@ class RecentController extends ChangeNotifier {
   List<StatusItem> _items = const [];
   bool _loading = false;
   bool _ready = false;
+  bool _hasSecondarySetup = true;
 
   List<StatusItem> get items => _items;
   bool get loading => _loading;
   bool get ready => _ready;
+  bool get hasSecondarySetup => _hasSecondarySetup;
 
   List<StatusItem> get images =>
       _items.where((i) => i.isImage).toList(growable: false);
@@ -29,6 +31,7 @@ class RecentController extends ChangeNotifier {
 
   Future<void> init() async {
     _ready = await _repo.isReady();
+    _hasSecondarySetup = await _repo.hasSecondarySetup();
     if (_ready) await refresh();
     notifyListeners();
   }
@@ -36,9 +39,17 @@ class RecentController extends ChangeNotifier {
   Future<bool> setup() async {
     final ok = await _repo.requestSetup();
     _ready = await _repo.isReady();
+    _hasSecondarySetup = await _repo.hasSecondarySetup();
     if (_ready) await refresh();
     notifyListeners();
     return ok && _ready;
+  }
+
+  Future<void> setupBusiness() async {
+    await _repo.requestSecondarySetup();
+    _hasSecondarySetup = await _repo.hasSecondarySetup();
+    if (_hasSecondarySetup) await refresh();
+    notifyListeners();
   }
 
   Future<void> refresh() async {
