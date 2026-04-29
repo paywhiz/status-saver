@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
+import '../../services/video_thumbs.dart';
 import '../../widgets/status_tile.dart';
 import '../viewer/viewer_page.dart';
 import 'saved_controller.dart';
@@ -118,10 +119,15 @@ class _Grid extends StatelessWidget {
         final it = items[i];
         return StatusTile(
           item: it,
-          thumbnailBytes: () async => it.file?.readAsBytes(),
+          thumbnailBytes: () async =>
+              it.isVideo ? await VideoThumbs().forItem(it) : await it.file?.readAsBytes(),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ViewerPage(item: it, source: source),
+              builder: (_) => ViewerPage(
+                items: items,
+                initialIndex: i,
+                source: source,
+              ),
             ),
           ),
         );

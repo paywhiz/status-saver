@@ -45,11 +45,12 @@ class RecentController extends ChangeNotifier {
     return ok && _ready;
   }
 
-  Future<void> setupBusiness() async {
-    await _repo.requestSecondarySetup();
+  Future<bool> setupBusiness() async {
+    final ok = await _repo.requestSecondarySetup();
     _hasSecondarySetup = await _repo.hasSecondarySetup();
     if (_hasSecondarySetup) await refresh();
     notifyListeners();
+    return ok;
   }
 
   Future<void> refresh() async {

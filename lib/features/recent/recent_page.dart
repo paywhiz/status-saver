@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/status_item.dart';
+import '../../services/video_thumbs.dart';
 import '../../widgets/status_tile.dart';
 import '../onboarding/onboarding_page.dart';
 import '../viewer/viewer_page.dart';
@@ -51,7 +52,21 @@ class _RecentPageState extends State<RecentPage>
             IconButton(
               icon: const Icon(Icons.add_business),
               tooltip: 'Add WhatsApp Business',
-              onPressed: () => context.read<RecentController>().setupBusiness(),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final ok = await context
+                    .read<RecentController>()
+                    .setupBusiness();
+                if (!ok) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Please pick the WhatsApp Business .Statuses folder',
+                      ),
+                    ),
+                  );
+                }
+              },
             ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -104,11 +119,15 @@ class _RecentGrid extends StatelessWidget {
           final it = items[i];
           return StatusTile(
             item: it,
-            thumbnailBytes: () async => c.readBytes(it),
+            thumbnailBytes: () async =>
+                it.isVideo ? await VideoThumbs().forItem(it) : await c.readBytes(it),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) =>
-                    ViewerPage(item: it, source: ViewerSource.recent),
+                builder: (_) => ViewerPage(
+                  items: items,
+                  initialIndex: i,
+                  source: ViewerSource.recent,
+                ),
               ),
             ),
           );

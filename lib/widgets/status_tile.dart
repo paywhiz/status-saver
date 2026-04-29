@@ -63,21 +63,10 @@ class _AsyncThumb extends StatefulWidget {
 }
 
 class _AsyncThumbState extends State<_AsyncThumb> {
-  Future<List<int>?>? _f;
-
-  @override
-  void initState() {
-    super.initState();
-    if (!widget.isVideo) {
-      _f = widget.loader();
-    }
-  }
+  late final Future<List<int>?> _f = widget.loader();
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isVideo) {
-      return const Center(child: Icon(Icons.movie, size: 40));
-    }
     return FutureBuilder<List<int>?>(
       future: _f,
       builder: (context, snap) {
@@ -89,7 +78,14 @@ class _AsyncThumbState extends State<_AsyncThumb> {
                   child: CircularProgressIndicator(strokeWidth: 2)));
         }
         final bytes = snap.data;
-        if (bytes == null) return const Center(child: Icon(Icons.broken_image));
+        if (bytes == null) {
+          return Center(
+            child: Icon(
+              widget.isVideo ? Icons.movie : Icons.broken_image,
+              size: 40,
+            ),
+          );
+        }
         return Image.memory(
           bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
           fit: BoxFit.cover,
