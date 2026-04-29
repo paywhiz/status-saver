@@ -32,9 +32,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'On the next screen, navigate to:\n\n'
-              '  Android  ›  media  ›  com.whatsapp  ›  WhatsApp  ›  Media  ›  .Statuses\n\n'
-              'and tap "Use this folder."',
+              'Tap "Grant access" — the picker opens directly in the right '
+              'folder. Just tap "Use this folder" to confirm.',
               style: TextStyle(color: Colors.black54),
             ),
             const SizedBox(height: 32),
