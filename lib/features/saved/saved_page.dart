@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
+import '../../services/download_action.dart';
 import '../../services/video_thumbs.dart';
 import '../../widgets/status_tile.dart';
 import '../viewer/viewer_page.dart';
@@ -130,6 +131,7 @@ class _Grid extends StatelessWidget {
               ),
             ),
           ),
+          onDownload: () => downloadStatusItemToGallery(context, it),
         );
       },
     );

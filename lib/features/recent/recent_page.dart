@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/status_item.dart';
+import '../../services/download_action.dart';
 import '../../services/video_thumbs.dart';
 import '../../widgets/status_tile.dart';
 import '../onboarding/onboarding_page.dart';
@@ -130,6 +131,7 @@ class _RecentGrid extends StatelessWidget {
                 ),
               ),
             ),
+            onDownload: () => downloadStatusItemToGallery(context, it),
           );
         },
       ),
