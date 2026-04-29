@@ -12,12 +12,15 @@ import 'status_repository.dart';
 const _prefKeyMessenger = 'saf.uri.whatsapp';
 const _prefKeyBusiness = 'saf.uri.whatsapp_business';
 
+// `EXTRA_INITIAL_URI` is honored by DocumentsUI when expressed as a `document/`
+// URI; the older `tree/` form is silently ignored on most ROMs and the picker
+// falls back to its last-used location.
 const _waStatusesInitialUri =
-    'content://com.android.externalstorage.documents/tree/'
+    'content://com.android.externalstorage.documents/document/'
     'primary%3AAndroid%2Fmedia%2Fcom.whatsapp%2FWhatsApp%2FMedia%2F.Statuses';
 
 const _wabStatusesInitialUri =
-    'content://com.android.externalstorage.documents/tree/'
+    'content://com.android.externalstorage.documents/document/'
     'primary%3AAndroid%2Fmedia%2Fcom.whatsapp.w4b%2FWhatsApp%20Business%2FMedia%2F.Statuses';
 
 /// Reads WhatsApp / WhatsApp Business `.Statuses` directories on Android via
@@ -51,15 +54,33 @@ class AndroidStatusSource implements StatusRepository {
   Future<SharedPreferences> get prefs async =>
       SharedPreferences.getInstance();
 
-  Future<bool> pickMessengerFolder() => _pick(_prefKeyMessenger, _waStatusesInitialUri);
-  Future<bool> pickBusinessFolder() => _pick(_prefKeyBusiness, _wabStatusesInitialUri);
+  Future<bool> pickMessengerFolder() => _pick(
+        _prefKeyMessenger,
+        _waStatusesInitialUri,
+        mustContain: 'com.whatsapp/',
+        mustNotContain: 'com.whatsapp.w4b',
+      );
 
-  Future<bool> _pick(String key, String initialUri) async {
+  Future<bool> pickBusinessFolder() => _pick(
+        _prefKeyBusiness,
+        _wabStatusesInitialUri,
+        mustContain: 'com.whatsapp.w4b',
+      );
+
+  Future<bool> _pick(
+    String key,
+    String initialUri, {
+    required String mustContain,
+    String? mustNotContain,
+  }) async {
     final result = await _saf.pickDirectory(
       persistablePermission: true,
       initialUri: initialUri,
     );
     if (result == null) return false;
+    final decoded = Uri.decodeFull(result.uri);
+    if (!decoded.contains(mustContain)) return false;
+    if (mustNotContain != null && decoded.contains(mustNotContain)) return false;
     final p = await prefs;
     await p.setString(key, result.uri);
     return true;

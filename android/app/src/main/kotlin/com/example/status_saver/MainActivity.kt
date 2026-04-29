@@ -1,11 +1,14 @@
 package com.example.status_saver
 
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
@@ -36,8 +39,53 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "videoThumbnail" -> {
+                        val uriStr = call.argument<String>("uri")
+                        val path = call.argument<String>("path")
+                        val maxSize = call.argument<Int>("maxSize") ?: 256
+                        executor.execute {
+                            val bytes = extractThumbnail(uriStr, path, maxSize)
+                            mainHandler.post { result.success(bytes) }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun extractThumbnail(uriStr: String?, path: String?, maxSize: Int): ByteArray? {
+        val mmr = MediaMetadataRetriever()
+        return try {
+            when {
+                uriStr != null -> mmr.setDataSource(this, Uri.parse(uriStr))
+                path != null -> mmr.setDataSource(path)
+                else -> return null
+            }
+            val frame = mmr.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: return null
+            val scaled = scaleToBox(frame, maxSize)
+            if (scaled !== frame) frame.recycle()
+            val baos = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+            scaled.recycle()
+            baos.toByteArray()
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { mmr.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun scaleToBox(src: Bitmap, maxSize: Int): Bitmap {
+        val w = src.width
+        val h = src.height
+        if (w <= maxSize && h <= maxSize) return src
+        val ratio = w.toFloat() / h.toFloat()
+        val (nw, nh) = if (w >= h) {
+            maxSize to (maxSize / ratio).toInt().coerceAtLeast(1)
+        } else {
+            (maxSize * ratio).toInt().coerceAtLeast(1) to maxSize
+        }
+        return Bitmap.createScaledBitmap(src, nw, nh, true)
     }
 }

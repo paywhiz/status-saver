@@ -16,40 +16,118 @@ import 'video_viewer.dart';
 
 enum ViewerSource { recent, saved }
 
-class ViewerPage extends StatelessWidget {
+class ViewerPage extends StatefulWidget {
   const ViewerPage({
     super.key,
-    required this.item,
+    required this.items,
+    required this.initialIndex,
     required this.source,
   });
 
-  final StatusItem item;
+  final List<StatusItem> items;
+  final int initialIndex;
   final ViewerSource source;
 
   @override
-  Widget build(BuildContext context) {
-    final body = item.isVideo
-        ? VideoViewer(item: item)
-        : ImageViewer(item: item);
+  State<ViewerPage> createState() => _ViewerPageState();
+}
 
+class _ViewerPageState extends State<ViewerPage> {
+  late final PageController _pc;
+  late List<StatusItem> _items;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List.of(widget.items);
+    _index = widget.initialIndex.clamp(0, _items.length - 1);
+    _pc = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  void _goPrev() => _pc.previousPage(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+
+  void _goNext() => _pc.nextPage(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+
+  /// Removes the current item from the list (after a Delete action).
+  /// Pops the page if the list becomes empty.
+  void _removeCurrent() {
+    if (_items.length <= 1) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final wasLast = _index == _items.length - 1;
+    setState(() {
+      _items.removeAt(_index);
+      if (wasLast) _index = _items.length - 1;
+    });
+    if (wasLast) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pc.hasClients) _pc.jumpToPage(_index);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _items[_index];
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(item.displayName ?? 'Status'),
+        elevation: 0,
       ),
-      body: SafeArea(child: body),
-      bottomNavigationBar: _ActionBar(item: item, source: source),
+      body: SafeArea(
+        child: PageView.builder(
+          controller: _pc,
+          itemCount: _items.length,
+          onPageChanged: (i) => setState(() => _index = i),
+          itemBuilder: (context, i) {
+            final it = _items[i];
+            if (it.isVideo) {
+              return VideoViewer(
+                key: ValueKey(it.id),
+                item: it,
+                onPrev: i > 0 ? _goPrev : null,
+                onNext: i < _items.length - 1 ? _goNext : null,
+              );
+            }
+            return ImageViewer(key: ValueKey(it.id), item: it);
+          },
+        ),
+      ),
+      bottomNavigationBar: _ActionBar(
+        item: current,
+        source: widget.source,
+        onDeleted: _removeCurrent,
+      ),
     );
   }
 }
 
 class _ActionBar extends StatefulWidget {
-  const _ActionBar({required this.item, required this.source});
+  const _ActionBar({
+    required this.item,
+    required this.source,
+    required this.onDeleted,
+  });
 
   final StatusItem item;
   final ViewerSource source;
+  final VoidCallback onDeleted;
 
   @override
   State<_ActionBar> createState() => _ActionBarState();
@@ -166,16 +244,14 @@ class _ActionBarState extends State<_ActionBar> {
 
   Future<void> _delete() async {
     setState(() => _busy = true);
-    // Capture before async gaps.
     final savedCtrl = context.read<SavedController>();
-    final navigator = Navigator.of(context);
     try {
       final store = SavedStore();
       await store.delete(widget.item);
-      if (mounted) {
-        await savedCtrl.refresh();
-        navigator.pop();
-      }
+      if (!mounted) return;
+      await savedCtrl.refresh();
+      if (!mounted) return;
+      widget.onDeleted();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
