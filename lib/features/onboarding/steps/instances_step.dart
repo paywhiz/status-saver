@@ -87,7 +87,7 @@ class _ToggleTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final disabled = onChanged == null;
     final accent = disabled
-        ? scheme.onSurface.withOpacity(0.38)
+        ? scheme.onSurface.withValues(alpha: 0.38)
         : (value ? scheme.onPrimaryContainer : scheme.onSurface);
     return Opacity(
       opacity: disabled ? 0.55 : 1,
