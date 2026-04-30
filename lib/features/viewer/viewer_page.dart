@@ -36,6 +36,7 @@ class _ViewerPageState extends State<ViewerPage> {
   late final PageController _pc;
   late List<StatusItem> _items;
   late int _index;
+  bool _zoomed = false;
 
   @override
   void initState() {
@@ -94,6 +95,9 @@ class _ViewerPageState extends State<ViewerPage> {
         child: PageView.builder(
           controller: _pc,
           itemCount: _items.length,
+          // While the active image is zoomed, swallow horizontal swipes so a
+          // two-finger pinch isn't stolen by the PageView gesture arena.
+          physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
           onPageChanged: (i) => setState(() => _index = i),
           itemBuilder: (context, i) {
             final it = _items[i];
@@ -105,7 +109,13 @@ class _ViewerPageState extends State<ViewerPage> {
                 onNext: i < _items.length - 1 ? _goNext : null,
               );
             }
-            return ImageViewer(key: ValueKey(it.id), item: it);
+            return ImageViewer(
+              key: ValueKey(it.id),
+              item: it,
+              onZoomChanged: (z) {
+                if (z != _zoomed) setState(() => _zoomed = z);
+              },
+            );
           },
         ),
       ),

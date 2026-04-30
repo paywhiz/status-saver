@@ -1,40 +1,64 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../settings/settings_controller.dart';
 import 'step_scaffold.dart';
 
-class ViewModeStep extends StatelessWidget {
-  const ViewModeStep({super.key, required this.onNext});
+/// Lets the user choose between combined and separate destinations when both
+/// instances are enabled. State is held locally and reported up to the
+/// onboarding parent on every change so it can be persisted at the end of the
+/// flow — `SettingsController.viewMode`'s getter ignores stored values until
+/// `bothInstancesEnabled` is true, which doesn't happen until `_finish()`.
+class ViewModeStep extends StatefulWidget {
+  const ViewModeStep({
+    super.key,
+    required this.initial,
+    required this.onChanged,
+    required this.onNext,
+  });
+
+  final RecentViewMode initial;
+  final ValueChanged<RecentViewMode> onChanged;
   final VoidCallback onNext;
 
   @override
+  State<ViewModeStep> createState() => _ViewModeStepState();
+}
+
+class _ViewModeStepState extends State<ViewModeStep> {
+  late RecentViewMode _selected = widget.initial;
+
+  void _select(RecentViewMode mode) {
+    if (mode == _selected) return;
+    setState(() => _selected = mode);
+    widget.onChanged(mode);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final s = context.watch<SettingsController>();
     return StepScaffold(
       icon: Icons.dashboard_customize_outlined,
       title: 'How should the two be shown?',
       body: 'You enabled both Personal and Business. Choose how to organize them.',
       primary: FilledButton(
-        onPressed: onNext,
+        onPressed: widget.onNext,
         child: const Text('Continue'),
       ),
       children: [
-        _Choice(
-          icon: Icons.merge_type,
-          title: 'Combined feed',
-          body: 'All statuses appear together in a single Recent tab, sorted by time.',
-          selected: s.viewMode == RecentViewMode.combined,
-          onTap: () => s.setViewMode(RecentViewMode.combined),
-        ),
-        const SizedBox(height: 12),
         _Choice(
           icon: Icons.view_module_outlined,
           title: 'Separate destinations',
           body:
               'Personal and Business each get their own bottom-nav tab so you can switch between them like apps.',
-          selected: s.viewMode == RecentViewMode.separate,
-          onTap: () => s.setViewMode(RecentViewMode.separate),
+          selected: _selected == RecentViewMode.separate,
+          onTap: () => _select(RecentViewMode.separate),
+        ),
+        const SizedBox(height: 12),
+        _Choice(
+          icon: Icons.merge_type,
+          title: 'Combined feed',
+          body: 'All statuses appear together in a single Recent tab, sorted by time.',
+          selected: _selected == RecentViewMode.combined,
+          onTap: () => _select(RecentViewMode.combined),
         ),
       ],
     );

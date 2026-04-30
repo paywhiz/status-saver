@@ -129,6 +129,10 @@ class _GrantStepState extends State<GrantStep> {
   }
 }
 
+/// Status badge for each instance the user chose. Read-only: the user grants
+/// access via the FilledButton below, which walks them through a SAF picker
+/// per instance. The earlier visual used `radio_button_unchecked` which read
+/// as a tappable selector.
 class _StatusRow extends StatelessWidget {
   const _StatusRow({required this.label, required this.granted});
   final String label;
@@ -137,17 +141,35 @@ class _StatusRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final accent = granted ? scheme.primary : scheme.outline;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(
-            granted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: granted ? scheme.primary : scheme.outline,
-          ),
-          const SizedBox(width: 12),
-          Text(label, style: Theme.of(context).textTheme.bodyLarge),
-        ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              granted ? Icons.check_circle : Icons.lock_outline,
+              color: accent,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+            ),
+            Text(
+              granted ? 'Granted' : 'Pending',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

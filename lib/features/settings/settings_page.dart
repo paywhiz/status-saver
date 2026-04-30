@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/android_status_source.dart';
 import '../../data/status_repository.dart';
+import '../../services/permissions.dart';
 import '../recent/recent_controller.dart';
 import 'settings_controller.dart';
 
@@ -83,7 +84,12 @@ class SettingsPage extends StatelessWidget {
     return RadioGroup<SaveDestination>(
       groupValue: s.saveDestination,
       onChanged: (v) {
-        if (v != null) s.setSaveDestination(v);
+        if (v == null) return;
+        if (v == SaveDestination.gallery) {
+          _pickGalleryDestination(context, s);
+        } else {
+          s.setSaveDestination(v);
+        }
       },
       child: const _Section(
         title: 'Default Save Destination',
@@ -139,6 +145,22 @@ class SettingsPage extends StatelessWidget {
   }
 
   // ---------------------------------------------------------------- handlers
+
+  Future<void> _pickGalleryDestination(
+      BuildContext context, SettingsController s) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await Permissions().ensureGallerySave();
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Gallery access denied — saves will fail. Grant in system settings.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+    await s.setSaveDestination(SaveDestination.gallery);
+  }
 
   Future<void> _onToggleInstance(
     BuildContext context,

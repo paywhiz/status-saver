@@ -1,5 +1,6 @@
 package com.example.status_saver
 
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -48,6 +49,14 @@ class MainActivity : FlutterActivity() {
                             mainHandler.post { result.success(bytes) }
                         }
                     }
+                    "isPackageInstalled" -> {
+                        val pkg = call.argument<String>("package")
+                        if (pkg == null) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        result.success(isPackageInstalled(pkg))
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -73,6 +82,17 @@ class MainActivity : FlutterActivity() {
             null
         } finally {
             try { mmr.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun isPackageInstalled(pkg: String): Boolean {
+        return try {
+            packageManager.getPackageInfo(pkg, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
         }
     }
 

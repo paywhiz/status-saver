@@ -1,32 +1,37 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:gal/gal.dart';
 
 import '../data/status_item.dart';
 
 class MediaSaver {
+  /// Folder/album name where saves are organized. On Android the OS routes
+  /// images into `Pictures/<album>/` and videos into `Movies/<album>/`; on
+  /// iOS this becomes a Photos album of the same name containing both.
+  static const String albumName = 'Status Saver';
+
   /// Persists [bytes] to the device gallery (Photos on iOS, Pictures/Movies
-  /// via MediaStore on Android). Returns true on success.
+  /// via MediaStore on Android), under the [albumName] folder. Returns true
+  /// on success.
   Future<bool> saveBytesToGallery({
     required Uint8List bytes,
     required String name,
     required StatusKind kind,
   }) async {
-    final dynamic result = kind == StatusKind.video
-        ? await ImageGallerySaverPlus.saveFile(
-            await _writeTemp(bytes, name),
-            name: name,
-          )
-        : await ImageGallerySaverPlus.saveImage(
-            bytes,
-            name: _stripExt(name),
-            quality: 100,
-          );
-    if (result is Map) {
-      return result['isSuccess'] == true;
+    try {
+      if (kind == StatusKind.video) {
+        final tmp = await _writeTemp(bytes, name);
+        await Gal.putVideo(tmp, album: albumName);
+      } else {
+        await Gal.putImageBytes(bytes, album: albumName, name: _stripExt(name));
+      }
+      return true;
+    } on GalException catch (_) {
+      return false;
+    } catch (_) {
+      return false;
     }
-    return result != null;
   }
 
   String _stripExt(String name) {
