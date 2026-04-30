@@ -6,8 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
-import '../../services/media_saver.dart';
-import '../../services/permissions.dart';
+import '../../services/download_action.dart';
 import '../../services/share_service.dart';
 import '../recent/recent_controller.dart';
 import '../saved/saved_controller.dart';
@@ -213,20 +212,7 @@ class _ActionBarState extends State<_ActionBar> {
   Future<void> _saveToGallery() async {
     setState(() => _busy = true);
     try {
-      final ok = await Permissions().ensureGallerySave();
-      if (!mounted) return;
-      if (!ok) {
-        _toast('Permission denied');
-        return;
-      }
-      final bytes = await _bytes();
-      if (!mounted) return;
-      final saved = await MediaSaver().saveBytesToGallery(
-        bytes: bytes,
-        name: widget.item.displayName ?? 'status',
-        kind: widget.item.kind,
-      );
-      if (mounted) _toast(saved ? 'Added to gallery' : 'Save failed');
+      await downloadStatusItemToGallery(context, widget.item);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
