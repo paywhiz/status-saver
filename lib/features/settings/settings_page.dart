@@ -58,11 +58,11 @@ class SettingsPage extends StatelessWidget {
       onChanged: (v) {
         if (v != null) s.setViewMode(v);
       },
-      child: _Section(
+      child: const _Section(
         title: 'View Mode',
         subtitle:
             'How to show Personal and Business statuses when both are enabled.',
-        children: const [
+        children: [
           RadioListTile<RecentViewMode>(
             value: RecentViewMode.combined,
             title: Text('Combined feed'),
@@ -85,11 +85,11 @@ class SettingsPage extends StatelessWidget {
       onChanged: (v) {
         if (v != null) s.setSaveDestination(v);
       },
-      child: _Section(
+      child: const _Section(
         title: 'Default Save Destination',
         subtitle: 'Where the Save button puts statuses by default. '
             'Long-press Save to choose the other destination once.',
-        children: const [
+        children: [
           RadioListTile<SaveDestination>(
             value: SaveDestination.gallery,
             title: Text('Gallery'),
