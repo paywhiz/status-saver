@@ -33,13 +33,30 @@ class StatusItem {
   bool get isImage => kind == StatusKind.image;
 }
 
+const Set<String> imageExtensions = {
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.bmp',
+};
+
+const Set<String> videoExtensions = {
+  '.mp4', '.mov', '.3gp', '.mkv', '.webm',
+};
+
+bool _hasExtension(String lowerName, Set<String> extensions) {
+  for (final ext in extensions) {
+    if (lowerName.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+bool isMediaFileName(String name) {
+  final lower = name.toLowerCase();
+  return _hasExtension(lower, imageExtensions) ||
+      _hasExtension(lower, videoExtensions);
+}
+
 StatusKind kindFromName(String name) {
   final lower = name.toLowerCase();
-  if (lower.endsWith('.mp4') ||
-      lower.endsWith('.mov') ||
-      lower.endsWith('.3gp') ||
-      lower.endsWith('.mkv') ||
-      lower.endsWith('.webm')) {
+  if (_hasExtension(lower, videoExtensions)) {
     return StatusKind.video;
   }
   return StatusKind.image;

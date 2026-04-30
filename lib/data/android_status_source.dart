@@ -135,7 +135,10 @@ class AndroidStatusSource implements StatusRepository {
     }
     return [
       for (final c in children)
-        if (!c.isDir && !c.name.startsWith('.') && c.name != '.nomedia')
+        if (!c.isDir &&
+            !c.name.startsWith('.') &&
+            c.name != '.nomedia' &&
+            isMediaFileName(c.name))
           StatusItem(
             id: c.uri,
             kind: kindFromName(c.name),

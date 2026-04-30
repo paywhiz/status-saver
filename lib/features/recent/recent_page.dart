@@ -131,6 +131,7 @@ class _RecentGrid extends StatelessWidget {
         itemBuilder: (context, i) {
           final it = items[i];
           return StatusTile(
+            key: ValueKey(it.uri ?? it.file?.path ?? it.id),
             item: it,
             showOriginBadge: showOriginBadge,
             thumbnailBytes: () async => it.isVideo

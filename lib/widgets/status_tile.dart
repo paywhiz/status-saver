@@ -52,7 +52,12 @@ class StatusTile extends StatelessWidget {
             child: ColoredBox(
               color: scheme.surfaceContainerHighest,
               child: f != null && item.isImage
-                  ? Image.file(f, fit: BoxFit.cover)
+                  ? Image.file(
+                      f,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const _ThumbFallback(isVideo: false),
+                    )
                   : _AsyncThumb(
                       loader: thumbnailBytes, isVideo: item.isVideo),
             ),
@@ -120,17 +125,21 @@ class _PlayBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
+    return Container(
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.45),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.black54, blurRadius: 8, spreadRadius: 1),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 4),
         ],
       ),
-      child: Icon(
-        Icons.play_circle_fill,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.play_arrow_rounded,
         color: Colors.white,
-        size: 56,
+        size: 24,
       ),
     );
   }
@@ -253,7 +262,24 @@ class _AsyncThumb extends StatefulWidget {
 }
 
 class _AsyncThumbState extends State<_AsyncThumb> {
-  late final Future<List<int>?> _f = widget.loader();
+  late Future<List<int>?> _f;
+
+  @override
+  void initState() {
+    super.initState();
+    _f = widget.loader();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AsyncThumb old) {
+    super.didUpdateWidget(old);
+    // GridView recycles tile state across items. Without this the future from
+    // a previous item would stay attached and the new tile would either keep
+    // a stale spinner or render the wrong thumbnail.
+    if (!identical(old.loader, widget.loader)) {
+      _f = widget.loader();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -268,19 +294,31 @@ class _AsyncThumbState extends State<_AsyncThumb> {
                   child: CircularProgressIndicator(strokeWidth: 2)));
         }
         final bytes = snap.data;
-        if (bytes == null) {
-          return Center(
-            child: Icon(
-              widget.isVideo ? Icons.movie : Icons.broken_image,
-              size: 40,
-            ),
-          );
+        if (bytes == null || bytes.isEmpty) {
+          return _ThumbFallback(isVideo: widget.isVideo);
         }
         return Image.memory(
           bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
           fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              _ThumbFallback(isVideo: widget.isVideo),
         );
       },
+    );
+  }
+}
+
+class _ThumbFallback extends StatelessWidget {
+  const _ThumbFallback({required this.isVideo});
+  final bool isVideo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Icon(
+        isVideo ? Icons.movie : Icons.broken_image,
+        size: 40,
+      ),
     );
   }
 }

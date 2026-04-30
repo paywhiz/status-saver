@@ -32,21 +32,21 @@ class StepScaffold extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 32),
                     Container(
-                      width: 88,
-                      height: 88,
+                      width: 96,
+                      height: 96,
                       decoration: BoxDecoration(
                         color: scheme.primaryContainer,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(icon, size: 44, color: scheme.onPrimaryContainer),
+                      child: Icon(icon, size: 48, color: scheme.onPrimaryContainer),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                     ),
@@ -54,11 +54,12 @@ class StepScaffold extends StatelessWidget {
                     Text(
                       body,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: scheme.onSurfaceVariant,
+                            height: 1.4,
                           ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
                     ...children,
                   ],
                 ),
