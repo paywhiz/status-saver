@@ -3,6 +3,7 @@ import 'package:saf_util/saf_util.dart';
 import 'package:saf_util/saf_util_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/settings/settings_controller.dart';
 import 'status_item.dart';
 import 'status_repository.dart';
 
@@ -23,10 +24,17 @@ const _wabStatusesInitialUri =
 /// Reads WhatsApp / WhatsApp Business `.Statuses` directories on Android via
 /// the Storage Access Framework. The user grants directory access once;
 /// the URI is persisted across launches.
+///
+/// The optional [SettingsController] lets users disable an instance from
+/// Settings without losing the persisted SAF permission — `listRecent` skips
+/// disabled origins while keeping the URI cached for re-enable.
 class AndroidStatusSource implements StatusRepository {
-  AndroidStatusSource({SafUtil? saf}) : _saf = saf ?? SafUtil();
+  AndroidStatusSource({SafUtil? saf, SettingsController? settings})
+      : _saf = saf ?? SafUtil(),
+        _settings = settings;
 
   final SafUtil _saf;
+  final SettingsController? _settings;
 
   static const _channel = MethodChannel('com.example.status_saver/saf');
 
@@ -88,10 +96,14 @@ class AndroidStatusSource implements StatusRepository {
   Future<String?> businessUri() async =>
       (await prefs).getString(_prefKeyBusiness);
 
+  Future<void> clearMessenger() async =>
+      (await prefs).remove(_prefKeyMessenger);
+  Future<void> clearBusiness() async =>
+      (await prefs).remove(_prefKeyBusiness);
+
   Future<void> clear() async {
-    final p = await prefs;
-    await p.remove(_prefKeyMessenger);
-    await p.remove(_prefKeyBusiness);
+    await clearMessenger();
+    await clearBusiness();
   }
 
   @override
@@ -100,10 +112,13 @@ class AndroidStatusSource implements StatusRepository {
     final m = await messengerUri();
     final b = await businessUri();
 
-    if (m != null) {
+    final personalOn = _settings?.personalEnabled ?? true;
+    final businessOn = _settings?.businessEnabled ?? true;
+
+    if (m != null && personalOn) {
       out.addAll(await _list(m, StatusOrigin.whatsapp));
     }
-    if (b != null) {
+    if (b != null && businessOn) {
       out.addAll(await _list(b, StatusOrigin.whatsappBusiness));
     }
 
