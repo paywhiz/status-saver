@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../data/status_item.dart';
 import '../features/settings/settings_controller.dart';
+import '../services/image_bytes_cache.dart';
+import '../services/video_thumbs.dart';
 
 /// Square thumbnail tile used in both Recent and Saved grids.
 class StatusTile extends StatelessWidget {
   const StatusTile({
     super.key,
     required this.item,
-    required this.thumbnailBytes,
     required this.onTap,
     this.onSave,
     this.onSaveOverride,
@@ -18,11 +19,6 @@ class StatusTile extends StatelessWidget {
   });
 
   final StatusItem item;
-
-  /// For Android SAF items we don't have a File path until we read the bytes,
-  /// so the controller passes a small thumbnail buffer in. On Saved items
-  /// (real File) the tile can render directly via [Image.file].
-  final Future<List<int>?> Function() thumbnailBytes;
 
   final VoidCallback onTap;
 
@@ -58,8 +54,7 @@ class StatusTile extends StatelessWidget {
                       errorBuilder: (_, __, ___) =>
                           const _ThumbFallback(isVideo: false),
                     )
-                  : _AsyncThumb(
-                      loader: thumbnailBytes, isVideo: item.isVideo),
+                  : _AsyncThumb(item: item),
             ),
           ),
           if (item.isVideo) const Center(child: _PlayBadge()),
@@ -252,38 +247,42 @@ class _SaveButtonState extends State<_SaveButton> {
 }
 
 class _AsyncThumb extends StatefulWidget {
-  const _AsyncThumb({required this.loader, required this.isVideo});
+  const _AsyncThumb({required this.item});
 
-  final Future<List<int>?> Function() loader;
-  final bool isVideo;
+  final StatusItem item;
 
   @override
   State<_AsyncThumb> createState() => _AsyncThumbState();
 }
 
 class _AsyncThumbState extends State<_AsyncThumb> {
-  late Future<List<int>?> _f;
+  late Future<Uint8List?> _f;
 
   @override
   void initState() {
     super.initState();
-    _f = widget.loader();
+    _f = _load();
   }
 
   @override
   void didUpdateWidget(covariant _AsyncThumb old) {
     super.didUpdateWidget(old);
-    // GridView recycles tile state across items. Without this the future from
-    // a previous item would stay attached and the new tile would either keep
-    // a stale spinner or render the wrong thumbnail.
-    if (!identical(old.loader, widget.loader)) {
-      _f = widget.loader();
+    // GridView recycles tile state across items. When the underlying item
+    // changes, swap the future so the tile renders the correct thumbnail.
+    if (old.item.id != widget.item.id) {
+      _f = _load();
     }
+  }
+
+  Future<Uint8List?> _load() {
+    return widget.item.isVideo
+        ? VideoThumbs().forItem(widget.item)
+        : ImageBytesCache().forItemThumb(widget.item);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<int>?>(
+    return FutureBuilder<Uint8List?>(
       future: _f,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
@@ -295,13 +294,14 @@ class _AsyncThumbState extends State<_AsyncThumb> {
         }
         final bytes = snap.data;
         if (bytes == null || bytes.isEmpty) {
-          return _ThumbFallback(isVideo: widget.isVideo);
+          return _ThumbFallback(isVideo: widget.item.isVideo);
         }
         return Image.memory(
-          bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+          bytes,
           fit: BoxFit.cover,
+          gaplessPlayback: true,
           errorBuilder: (_, __, ___) =>
-              _ThumbFallback(isVideo: widget.isVideo),
+              _ThumbFallback(isVideo: widget.item.isVideo),
         );
       },
     );

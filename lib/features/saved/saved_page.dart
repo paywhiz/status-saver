@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
 import '../../services/download_action.dart';
-import '../../services/video_thumbs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/status_tile.dart';
 import '../settings/settings_controller.dart';
@@ -110,17 +109,23 @@ class _Grid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.read<SavedController>();
+    final fromGallery = c.sourceIsGallery;
     if (items.isEmpty) {
       return RefreshIndicator(
         onRefresh: c.refresh,
         child: ListView(
-          children: const [
+          children: [
             SizedBox(
               height: 480,
               child: EmptyState(
                 icon: Icons.bookmark_outline,
-                title: 'Nothing saved yet',
-                body: 'View a status, tap Save, and it\'ll appear here.',
+                title: fromGallery
+                    ? 'No items in your gallery yet'
+                    : 'Nothing saved yet',
+                body: fromGallery
+                    ? 'View a status and tap Save — it\'ll be added to '
+                        'your gallery and show up here.'
+                    : 'View a status, tap Save, and it\'ll appear here.',
               ),
             ),
           ],
@@ -141,9 +146,6 @@ class _Grid extends StatelessWidget {
           final it = items[i];
           return StatusTile(
             item: it,
-            thumbnailBytes: () async => it.isVideo
-                ? await VideoThumbs().forItem(it)
-                : await it.file?.readAsBytes(),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => ViewerPage(
@@ -153,10 +155,13 @@ class _Grid extends StatelessWidget {
                 ),
               ),
             ),
-            // From the Saved tab "save" implicitly means "to gallery" — the
-            // item is already in the in-app store.
-            onSave: () => saveStatusItem(context, it,
-                override: SaveDestination.gallery),
+            // Save action is hidden for gallery-sourced items — they're
+            // already in the gallery. From the in-app store, "save" means
+            // "to gallery" (override below).
+            onSave: fromGallery
+                ? null
+                : () => saveStatusItem(context, it,
+                    override: SaveDestination.gallery),
           );
         },
       ),

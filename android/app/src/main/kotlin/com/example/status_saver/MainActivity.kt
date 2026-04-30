@@ -1,11 +1,14 @@
 package com.example.status_saver
 
+import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -57,6 +60,16 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(isPackageInstalled(pkg))
                     }
+                    "listGalleryAlbum" -> {
+                        val album = call.argument<String>("albumName") ?: run {
+                            result.error("INVALID_ALBUM", "albumName is null", null)
+                            return@setMethodCallHandler
+                        }
+                        executor.execute {
+                            val items = listGalleryAlbum(album)
+                            mainHandler.post { result.success(items) }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -82,6 +95,67 @@ class MainActivity : FlutterActivity() {
             null
         } finally {
             try { mmr.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun listGalleryAlbum(albumName: String): List<Map<String, Any?>> {
+        val out = mutableListOf<Map<String, Any?>>()
+        queryBucket(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, albumName, "image", out)
+        queryBucket(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, albumName, "video", out)
+        out.sortByDescending { (it["modifiedMs"] as? Long) ?: 0L }
+        return out
+    }
+
+    private fun queryBucket(
+        contentUri: Uri,
+        albumName: String,
+        kind: String,
+        out: MutableList<Map<String, Any?>>,
+    ) {
+        val idCol = MediaStore.MediaColumns._ID
+        val nameCol = MediaStore.MediaColumns.DISPLAY_NAME
+        val modCol = MediaStore.MediaColumns.DATE_MODIFIED
+        val projection = arrayOf(idCol, nameCol, modCol)
+
+        // The MediaColumns.BUCKET_DISPLAY_NAME / RELATIVE_PATH constants are
+        // API 29+, but the underlying SQLite columns of those names exist on
+        // older versions too via MediaStore.Images/Video. Use literal column
+        // names so this compiles cleanly across the project's minSdk range.
+        val (selection, args) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "bucket_display_name = ? OR relative_path LIKE ?" to
+                arrayOf(albumName, "%/$albumName/%")
+        } else {
+            "bucket_display_name = ?" to arrayOf(albumName)
+        }
+
+        try {
+            contentResolver.query(
+                contentUri,
+                projection,
+                selection,
+                args,
+                "$modCol DESC",
+            )?.use { c ->
+                val idIdx = c.getColumnIndexOrThrow(idCol)
+                val nameIdx = c.getColumnIndexOrThrow(nameCol)
+                val modIdx = c.getColumnIndexOrThrow(modCol)
+                while (c.moveToNext()) {
+                    val id = c.getLong(idIdx)
+                    val name = c.getString(nameIdx) ?: continue
+                    val modSec = c.getLong(modIdx)
+                    val uri = ContentUris.withAppendedId(contentUri, id).toString()
+                    out.add(
+                        mapOf(
+                            "uri" to uri,
+                            "name" to name,
+                            "kind" to kind,
+                            "modifiedMs" to modSec * 1000L,
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            // Best-effort enumeration; partial results are fine.
         }
     }
 

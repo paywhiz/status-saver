@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../data/status_item.dart';
 import '../../services/download_action.dart';
-import '../../services/video_thumbs.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/status_tile.dart';
 import '../settings/settings_controller.dart';
@@ -134,9 +133,6 @@ class _RecentGrid extends StatelessWidget {
             key: ValueKey(it.uri ?? it.file?.path ?? it.id),
             item: it,
             showOriginBadge: showOriginBadge,
-            thumbnailBytes: () async => it.isVideo
-                ? await VideoThumbs().forItem(it)
-                : await c.readBytes(it),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => ViewerPage(
