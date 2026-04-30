@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'data/android_status_source.dart';
+import 'data/gallery_album_source.dart';
 import 'data/ios_status_source.dart';
 import 'data/saved_store.dart';
 import 'data/status_repository.dart';
@@ -53,7 +54,11 @@ class _BootstrapState extends State<_Bootstrap> {
   late final SavedStore _saved = SavedStore();
   IosShareIngest? _iosIngest;
 
-  late final SavedController _savedController = SavedController(_saved);
+  late final SavedController _savedController = SavedController(
+    _saved,
+    gallery: Platform.isAndroid ? GalleryAlbumSource() : null,
+    settings: widget.settings,
+  );
   late final RecentController _recentController = RecentController(
     repo: widget.repo,
     savedStore: _saved,

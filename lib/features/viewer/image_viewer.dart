@@ -1,10 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../data/status_item.dart';
-import '../recent/recent_controller.dart';
+import '../../services/image_bytes_cache.dart';
 
 class ImageViewer extends StatefulWidget {
   const ImageViewer({super.key, required this.item, this.onZoomChanged});
@@ -35,6 +34,20 @@ class _ImageViewerState extends State<ImageViewer> {
   }
 
   @override
+  void didUpdateWidget(covariant ImageViewer old) {
+    super.didUpdateWidget(old);
+    // PageView may reuse this State across items if a key is missing.
+    // Reset transform defensively so a previously-zoomed image doesn't
+    // bleed into the next one and steal the gesture arena.
+    if (old.item.id != widget.item.id) {
+      _resetZoom();
+      _bytes = null;
+      _error = null;
+      _load();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.removeListener(_handleTransformChange);
     _controller.dispose();
@@ -52,16 +65,14 @@ class _ImageViewerState extends State<ImageViewer> {
 
   Future<void> _load() async {
     try {
-      final f = widget.item.file;
-      if (f != null) {
-        final b = await f.readAsBytes();
-        if (mounted) setState(() => _bytes = b);
-        return;
+      final b = await ImageBytesCache().forItemFull(widget.item);
+      if (mounted) {
+        setState(() => _bytes = b);
+        // Reset transform after the image becomes visible — InteractiveViewer
+        // wires its gesture recognizers when the child is first laid out, and
+        // ensuring identity here guarantees pinch works on the new page.
+        _resetZoom();
       }
-      final recent = context.read<RecentController>();
-      final raw = await recent.readBytes(widget.item);
-      final b = raw is Uint8List ? raw : Uint8List.fromList(raw);
-      if (mounted) setState(() => _bytes = b);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }

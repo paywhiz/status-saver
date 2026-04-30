@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../data/android_status_source.dart';
 import 'step_scaffold.dart';
 
-/// Sequentially asks for SAF folder permission for each chosen instance.
-/// On completion, reports back which instances actually got granted.
+/// Per-instance SAF folder grant step. Each selected instance gets its own
+/// tappable row that launches only that instance's picker; the user returns
+/// to this same screen between picks.
 class GrantStep extends StatefulWidget {
   const GrantStep({
     super.key,
@@ -26,57 +27,49 @@ class GrantStep extends StatefulWidget {
   State<GrantStep> createState() => _GrantStepState();
 }
 
+enum _Instance { personal, business }
+
 class _GrantStepState extends State<GrantStep> {
-  bool _busy = false;
   bool _personalGranted = false;
   bool _businessGranted = false;
+  _Instance? _busy;
   String? _error;
 
-  Future<void> _grant() async {
+  bool get _allChosenGranted =>
+      (!widget.personal || _personalGranted) &&
+      (!widget.business || _businessGranted);
+
+  bool get _anyChosenGranted =>
+      (widget.personal && _personalGranted) ||
+      (widget.business && _businessGranted);
+
+  Future<void> _pick(_Instance which) async {
     final android = widget.android;
-    if (android == null) {
-      // No-op on non-Android (this page should not run there).
-      widget.onResult(
-        personalGranted: false,
-        businessGranted: false,
-      );
-      return;
-    }
+    if (android == null || _busy != null) return;
     setState(() {
-      _busy = true;
+      _busy = which;
       _error = null;
     });
-    var personalOk = _personalGranted;
-    var businessOk = _businessGranted;
     try {
-      if (widget.personal && !personalOk) {
-        personalOk = await android.pickMessengerFolder();
-      }
-      if (widget.business && !businessOk) {
-        businessOk = await android.pickBusinessFolder();
-      }
+      final ok = which == _Instance.personal
+          ? await android.pickMessengerFolder()
+          : await android.pickBusinessFolder();
       setState(() {
-        _personalGranted = personalOk;
-        _businessGranted = businessOk;
+        if (which == _Instance.personal) {
+          _personalGranted = ok;
+        } else {
+          _businessGranted = ok;
+        }
+        if (!ok) {
+          _error = 'That folder didn\'t look right. Tap the row to try again.';
+        }
       });
-      if ((widget.personal && !personalOk) ||
-          (widget.business && !businessOk)) {
-        setState(() {
-          _error = 'Some folders weren\'t granted. Tap to try again, '
-              'or skip — you can always set them up later from Settings.';
-        });
-      } else {
-        widget.onResult(
-          personalGranted: personalOk,
-          businessGranted: businessOk,
-        );
-      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busy = null);
     }
   }
 
-  void _skip() {
+  void _continue() {
     widget.onResult(
       personalGranted: _personalGranted,
       businessGranted: _businessGranted,
@@ -85,20 +78,23 @@ class _GrantStepState extends State<GrantStep> {
 
   @override
   Widget build(BuildContext context) {
+    final continueEnabled =
+        _busy == null && (_allChosenGranted || _anyChosenGranted);
     return StepScaffold(
       icon: Icons.folder_open_outlined,
       title: 'Grant folder access',
-      body: 'Status Saver needs to read each app\'s .Statuses folder. '
-          'The system picker will open in the right place — just tap '
-          '"Use this folder" to confirm.',
+      body: 'Tap each app below to grant access to its .Statuses folder. '
+          'The system picker opens in the right place — just tap '
+          '"Use this folder" to confirm. (To exit the picker without '
+          'picking, tap the X in its toolbar.)',
       primary: Column(
         children: [
           FilledButton(
-            onPressed: _busy ? null : _grant,
-            child: Text(_busy ? 'Working…' : 'Grant access'),
+            onPressed: continueEnabled ? _continue : null,
+            child: Text(_allChosenGranted ? 'Continue' : 'Continue with these'),
           ),
           TextButton(
-            onPressed: _busy ? null : _skip,
+            onPressed: _busy != null ? null : _continue,
             child: const Text('Skip for now'),
           ),
         ],
@@ -108,11 +104,17 @@ class _GrantStepState extends State<GrantStep> {
           _StatusRow(
             label: 'Personal WhatsApp',
             granted: _personalGranted,
+            busy: _busy == _Instance.personal,
+            disabled: _busy != null && _busy != _Instance.personal,
+            onTap: () => _pick(_Instance.personal),
           ),
         if (widget.business)
           _StatusRow(
             label: 'WhatsApp Business',
             granted: _businessGranted,
+            busy: _busy == _Instance.business,
+            disabled: _busy != null && _busy != _Instance.business,
+            onTap: () => _pick(_Instance.business),
           ),
         if (_error != null) ...[
           const SizedBox(height: 12),
@@ -129,46 +131,70 @@ class _GrantStepState extends State<GrantStep> {
   }
 }
 
-/// Status badge for each instance the user chose. Read-only: the user grants
-/// access via the FilledButton below, which walks them through a SAF picker
-/// per instance. The earlier visual used `radio_button_unchecked` which read
-/// as a tappable selector.
 class _StatusRow extends StatelessWidget {
-  const _StatusRow({required this.label, required this.granted});
+  const _StatusRow({
+    required this.label,
+    required this.granted,
+    required this.busy,
+    required this.disabled,
+    required this.onTap,
+  });
+
   final String label;
   final bool granted;
+  final bool busy;
+  final bool disabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final accent = granted ? scheme.primary : scheme.outline;
+    final tappable = !busy && !disabled;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              granted ? Icons.check_circle : Icons.lock_outline,
-              color: accent,
+          onTap: tappable ? onTap : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-            ),
-            Text(
-              granted ? 'Granted' : 'Pending',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            child: Row(
+              children: [
+                if (busy)
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Icon(
+                    granted ? Icons.check_circle : Icons.lock_outline,
                     color: accent,
-                    fontWeight: FontWeight.w600,
                   ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(label,
+                      style: Theme.of(context).textTheme.bodyLarge),
+                ),
+                Text(
+                  granted
+                      ? 'Granted'
+                      : (busy ? 'Opening…' : 'Tap to grant'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

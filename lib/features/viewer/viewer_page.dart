@@ -98,7 +98,14 @@ class _ViewerPageState extends State<ViewerPage> {
           // While the active image is zoomed, swallow horizontal swipes so a
           // two-finger pinch isn't stolen by the PageView gesture arena.
           physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
-          onPageChanged: (i) => setState(() => _index = i),
+          onPageChanged: (i) => setState(() {
+            _index = i;
+            // Force-reset zoom state on page change. The new page mounts a
+            // fresh InteractiveViewer with an identity matrix; without this
+            // a stale `true` from the previous page (e.g. mid-pinch) would
+            // keep PageView swipes disabled until the user pinched again.
+            _zoomed = false;
+          }),
           itemBuilder: (context, i) {
             final it = _items[i];
             if (it.isVideo) {
@@ -149,6 +156,10 @@ class _ActionBarState extends State<_ActionBar> {
   @override
   Widget build(BuildContext context) {
     final isSaved = widget.source == ViewerSource.saved;
+    // Gallery-sourced items are content:// URIs (no real File). Delete via
+    // the in-app SavedStore doesn't apply, and the user's Save action is a
+    // no-op since the item is already in the gallery.
+    final isGalleryItem = isSaved && widget.item.file == null;
     final destination = context.watch<SettingsController>().saveDestination;
     final saveLabel = isSaved
         ? 'Gallery'
@@ -164,7 +175,7 @@ class _ActionBarState extends State<_ActionBar> {
             _ActionButton(
               icon: Icons.save_alt_rounded,
               label: saveLabel,
-              onTap: _busy ? null : _save,
+              onTap: _busy || isGalleryItem ? null : _save,
               onLongPress:
                   _busy || isSaved ? null : _showSaveDestinationMenu,
             ),
@@ -173,7 +184,7 @@ class _ActionBarState extends State<_ActionBar> {
               label: 'Share',
               onTap: _busy ? null : _share,
             ),
-            if (isSaved)
+            if (isSaved && !isGalleryItem)
               _ActionButton(
                 icon: Icons.delete_outline,
                 label: 'Delete',
