@@ -53,68 +53,76 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _viewModeSection(BuildContext context, SettingsController s) {
-    return _Section(
-      title: 'View Mode',
-      subtitle:
-          'How to show Personal and Business statuses when both are enabled.',
-      children: [
-        RadioListTile<RecentViewMode>(
-          value: RecentViewMode.combined,
-          groupValue: s.viewMode,
-          onChanged: (v) => v == null ? null : s.setViewMode(v),
-          title: const Text('Combined feed'),
-          subtitle: const Text('All statuses together, sorted by time.'),
-        ),
-        RadioListTile<RecentViewMode>(
-          value: RecentViewMode.separate,
-          groupValue: s.viewMode,
-          onChanged: (v) => v == null ? null : s.setViewMode(v),
-          title: const Text('Separate destinations'),
-          subtitle: const Text(
-              'Personal and Business each get their own bottom-nav tab.'),
-        ),
-      ],
+    return RadioGroup<RecentViewMode>(
+      groupValue: s.viewMode,
+      onChanged: (v) {
+        if (v != null) s.setViewMode(v);
+      },
+      child: _Section(
+        title: 'View Mode',
+        subtitle:
+            'How to show Personal and Business statuses when both are enabled.',
+        children: const [
+          RadioListTile<RecentViewMode>(
+            value: RecentViewMode.combined,
+            title: Text('Combined feed'),
+            subtitle: Text('All statuses together, sorted by time.'),
+          ),
+          RadioListTile<RecentViewMode>(
+            value: RecentViewMode.separate,
+            title: Text('Separate destinations'),
+            subtitle: Text(
+                'Personal and Business each get their own bottom-nav tab.'),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _saveDestinationSection(BuildContext context, SettingsController s) {
-    return _Section(
-      title: 'Default Save Destination',
-      subtitle: 'Where the Save button puts statuses by default. '
-          'Long-press Save to choose the other destination once.',
-      children: [
-        RadioListTile<SaveDestination>(
-          value: SaveDestination.gallery,
-          groupValue: s.saveDestination,
-          onChanged: (v) => v == null ? null : s.setSaveDestination(v),
-          title: const Text('Gallery'),
-          subtitle: const Text(
-              'Saved statuses appear in your Photos/Gallery and stay if you uninstall the app.'),
-        ),
-        RadioListTile<SaveDestination>(
-          value: SaveDestination.inApp,
-          groupValue: s.saveDestination,
-          onChanged: (v) => v == null ? null : s.setSaveDestination(v),
-          title: const Text('In-App'),
-          subtitle: const Text(
-              'Saved statuses live privately inside Status Saver and are removed if you uninstall.'),
-        ),
-      ],
+    return RadioGroup<SaveDestination>(
+      groupValue: s.saveDestination,
+      onChanged: (v) {
+        if (v != null) s.setSaveDestination(v);
+      },
+      child: _Section(
+        title: 'Default Save Destination',
+        subtitle: 'Where the Save button puts statuses by default. '
+            'Long-press Save to choose the other destination once.',
+        children: const [
+          RadioListTile<SaveDestination>(
+            value: SaveDestination.gallery,
+            title: Text('Gallery'),
+            subtitle: Text(
+                'Saved statuses appear in your Photos/Gallery and stay if you uninstall the app.'),
+          ),
+          RadioListTile<SaveDestination>(
+            value: SaveDestination.inApp,
+            title: Text('In-App'),
+            subtitle: Text(
+                'Saved statuses live privately inside Status Saver and are removed if you uninstall.'),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _appearanceSection(BuildContext context, SettingsController s) {
-    return _Section(
-      title: 'Appearance',
-      children: [
-        for (final mode in ThemeMode.values)
-          RadioListTile<ThemeMode>(
-            value: mode,
-            groupValue: s.themeMode,
-            onChanged: (v) => v == null ? null : s.setThemeMode(v),
-            title: Text(_themeLabel(mode)),
-          ),
-      ],
+    return RadioGroup<ThemeMode>(
+      groupValue: s.themeMode,
+      onChanged: (v) {
+        if (v != null) s.setThemeMode(v);
+      },
+      child: _Section(
+        title: 'Appearance',
+        children: [
+          for (final mode in ThemeMode.values)
+            RadioListTile<ThemeMode>(
+              value: mode,
+              title: Text(_themeLabel(mode)),
+            ),
+        ],
+      ),
     );
   }
 

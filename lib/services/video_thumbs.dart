@@ -153,7 +153,7 @@ class VideoThumbs {
     } catch (_) {}
   }
 
-  /// 64-bit FNV-1a of "<key>|<mtime>" rendered as 16 hex chars. Collisions are
+  /// 64-bit FNV-1a of `<key>|<mtime>` rendered as 16 hex chars. Collisions are
   /// astronomically unlikely for the cache sizes we deal with, and including
   /// mtime ensures stale entries don't shadow updated source files.
   String _hashKey(String key, int mtime) {

@@ -85,18 +85,19 @@ class _SavedPageState extends State<SavedPage>
   }
 
   Future<void> _importFromFiles() async {
+    final store = context.read<SavedStore>();
+    final controller = context.read<SavedController>();
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.media,
     );
     if (result == null || result.files.isEmpty) return;
-    final store = context.read<SavedStore>();
     for (final f in result.files) {
       final p = f.path;
       if (p == null) continue;
       await store.saveFile(source: File(p));
     }
-    if (mounted) await context.read<SavedController>().refresh();
+    if (mounted) await controller.refresh();
   }
 }
 
