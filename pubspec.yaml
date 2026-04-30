@@ -19,15 +19,12 @@ dependencies:
 
   # Media
   video_player: ^2.9.2
-  image_gallery_saver_plus: ^4.0.1
+  gal: ^2.3.2
 
   # Sharing / iOS share-extension ingress / Files import
   share_plus: ^12.0.2
   receive_sharing_intent: ^1.8.0
   file_picker: ^11.0.2
-
-  # Misc
-  permission_handler: ^12.0.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0

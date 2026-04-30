@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../services/permissions.dart';
 import '../../settings/settings_controller.dart';
 import 'step_scaffold.dart';
 
@@ -26,10 +27,10 @@ class DestinationStep extends StatelessWidget {
           icon: Icons.photo_library_outlined,
           title: 'Gallery',
           body:
-              'Saves appear in your Photos / Gallery app, can be shared anywhere, '
-              'and stay on your phone if you uninstall Status Saver.',
+              'Saves appear in your Photos / Gallery in a "Status Saver" album, '
+              'can be shared anywhere, and stay on your phone if you uninstall.',
           selected: s.saveDestination == SaveDestination.gallery,
-          onTap: () => s.setSaveDestination(SaveDestination.gallery),
+          onTap: () => _pickGallery(context, s),
         ),
         const SizedBox(height: 12),
         _Choice(
@@ -43,6 +44,24 @@ class DestinationStep extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _pickGallery(
+      BuildContext context, SettingsController s) async {
+    // Prompt for Photos / MediaStore access right when the user selects
+    // Gallery, so the prompt is contextual and the actual save is friction-free.
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await Permissions().ensureGallerySave();
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Gallery access denied — saves will fail. You can grant later in system settings.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+    await s.setSaveDestination(SaveDestination.gallery);
   }
 }
 

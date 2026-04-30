@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Photos add-on (Android 13+) for image_gallery_saver_plus / MediaStore writes. -->
+    <!-- Photos add-on (Android 13+) for gal / MediaStore writes. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
@@ -25,7 +25,8 @@
     <application
         android:label="Status Saver"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"

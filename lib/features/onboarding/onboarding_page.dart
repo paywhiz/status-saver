@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/android_status_source.dart';
 import '../../data/status_repository.dart';
+import '../../services/installed_apps.dart';
 import '../recent/recent_controller.dart';
 import '../settings/settings_controller.dart';
 import 'steps/destination_step.dart';
@@ -46,6 +47,35 @@ class _OnboardingPageState extends State<OnboardingPage> {
   // it's the more useful starting choice, and avoids the impression that the
   // toggle isn't responsive on the view-mode step.
   RecentViewMode _viewMode = RecentViewMode.separate;
+
+  // Detected install status of each variant. Optimistic defaults until the
+  // probe finishes — by the time the user reaches the InstancesStep (third
+  // page) the result is in.
+  bool _personalInstalled = true;
+  bool _businessInstalled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _detectInstances();
+  }
+
+  Future<void> _detectInstances() async {
+    final probe = InstalledApps();
+    final personal = await probe.hasWhatsApp();
+    final business = await probe.hasWhatsAppBusiness();
+    if (!mounted) return;
+    setState(() {
+      _personalInstalled = personal;
+      _businessInstalled = business;
+      // Don't pre-select a variant the user can't actually use.
+      if (!personal) _personalSelected = false;
+      if (!business) _businessSelected = false;
+      // If only one is installed, pre-select it so the user just taps Continue.
+      if (personal && !business) _personalSelected = true;
+      if (business && !personal) _businessSelected = true;
+    });
+  }
 
   @override
   void dispose() {
@@ -93,6 +123,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
           InstancesStep(
             personalSelected: _personalSelected,
             businessSelected: _businessSelected,
+            personalInstalled: _personalInstalled,
+            businessInstalled: _businessInstalled,
             onChanged: (p, b) => setState(() {
               _personalSelected = p;
               _businessSelected = b;
