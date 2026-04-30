@@ -10,6 +10,7 @@ import '../../services/download_action.dart';
 import '../../services/share_service.dart';
 import '../recent/recent_controller.dart';
 import '../saved/saved_controller.dart';
+import '../settings/settings_controller.dart';
 import 'image_viewer.dart';
 import 'video_viewer.dart';
 
@@ -138,6 +139,10 @@ class _ActionBarState extends State<_ActionBar> {
   @override
   Widget build(BuildContext context) {
     final isSaved = widget.source == ViewerSource.saved;
+    final destination = context.watch<SettingsController>().saveDestination;
+    final saveLabel = isSaved
+        ? 'Gallery'
+        : (destination == SaveDestination.gallery ? 'Gallery' : 'Save');
     return SafeArea(
       top: false,
       child: Container(
@@ -146,16 +151,12 @@ class _ActionBarState extends State<_ActionBar> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            if (!isSaved)
-              _ActionButton(
-                icon: Icons.bookmark_add_outlined,
-                label: 'Save',
-                onTap: _busy ? null : _save,
-              ),
             _ActionButton(
-              icon: Icons.download_outlined,
-              label: 'Gallery',
-              onTap: _busy ? null : _saveToGallery,
+              icon: Icons.save_alt_rounded,
+              label: saveLabel,
+              onTap: _busy ? null : _save,
+              onLongPress:
+                  _busy || isSaved ? null : _showSaveDestinationMenu,
             ),
             _ActionButton(
               icon: Icons.share_outlined,
@@ -172,6 +173,44 @@ class _ActionBarState extends State<_ActionBar> {
         ),
       ),
     );
+  }
+
+  Future<void> _showSaveDestinationMenu() async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    final destination = await showMenu<SaveDestination>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        20, overlay.size.height - 240, 20, 80,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: SaveDestination.gallery,
+          child: Row(children: [
+            Icon(Icons.photo_library_outlined),
+            SizedBox(width: 12),
+            Text('Save to gallery'),
+          ]),
+        ),
+        PopupMenuItem(
+          value: SaveDestination.inApp,
+          child: Row(children: [
+            Icon(Icons.bookmark_outline),
+            SizedBox(width: 12),
+            Text('Save in app'),
+          ]),
+        ),
+      ],
+    );
+    if (destination != null && mounted) {
+      setState(() => _busy = true);
+      try {
+        await saveStatusItem(context, widget.item, override: destination);
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    }
   }
 
   Future<Uint8List> _bytes() async {
@@ -195,24 +234,13 @@ class _ActionBarState extends State<_ActionBar> {
 
   Future<void> _save() async {
     setState(() => _busy = true);
-    // Capture controllers before any async gap.
-    final recent = context.read<RecentController>();
-    final savedCtrl = context.read<SavedController>();
     try {
-      await recent.saveToLibrary(widget.item);
-      if (mounted) {
-        await savedCtrl.refresh();
-        _toast('Saved');
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _saveToGallery() async {
-    setState(() => _busy = true);
-    try {
-      await downloadStatusItemToGallery(context, widget.item);
+      // From the Saved tab the only sensible "save" is "to gallery"; the item
+      // is already in the in-app store.
+      final override = widget.source == ViewerSource.saved
+          ? SaveDestination.gallery
+          : null;
+      await saveStatusItem(context, widget.item, override: override);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -231,8 +259,8 @@ class _ActionBarState extends State<_ActionBar> {
   Future<void> _delete() async {
     setState(() => _busy = true);
     final savedCtrl = context.read<SavedController>();
+    final store = context.read<SavedStore>();
     try {
-      final store = SavedStore();
       await store.delete(widget.item);
       if (!mounted) return;
       await savedCtrl.refresh();
@@ -243,24 +271,25 @@ class _ActionBarState extends State<_ActionBar> {
     }
   }
 
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-    );
-  }
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton(
-      {required this.icon, required this.label, required this.onTap});
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.onLongPress,
+  });
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
         child: Column(

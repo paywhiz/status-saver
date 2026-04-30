@@ -3,15 +3,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../data/status_item.dart';
+import '../features/settings/settings_controller.dart';
 
 /// Square thumbnail tile used in both Recent and Saved grids.
-class StatusTile extends StatefulWidget {
+class StatusTile extends StatelessWidget {
   const StatusTile({
     super.key,
     required this.item,
     required this.thumbnailBytes,
     required this.onTap,
-    this.onDownload,
+    this.onSave,
+    this.onSaveOverride,
+    this.showOriginBadge = false,
   });
 
   final StatusItem item;
@@ -23,61 +26,90 @@ class StatusTile extends StatefulWidget {
 
   final VoidCallback onTap;
 
-  /// Optional per-tile "save to gallery" action. When provided, a small
-  /// download icon is rendered in the bottom-right corner.
-  final Future<void> Function()? onDownload;
+  /// Tap handler for the per-tile save button. Uses the user's default
+  /// destination from Settings.
+  final Future<void> Function()? onSave;
 
-  @override
-  State<StatusTile> createState() => _StatusTileState();
-}
+  /// Long-press handler — receives the *other* destination so the tile can
+  /// offer a one-shot override without opening Settings.
+  final Future<void> Function(SaveDestination override)? onSaveOverride;
 
-class _StatusTileState extends State<StatusTile> {
-  bool _downloading = false;
-
-  Future<void> _handleDownload() async {
-    final cb = widget.onDownload;
-    if (cb == null || _downloading) return;
-    setState(() => _downloading = true);
-    try {
-      await cb();
-    } finally {
-      if (mounted) setState(() => _downloading = false);
-    }
-  }
+  /// When true (combined view with both instances enabled), shows a tiny
+  /// "P"/"B" chip in the top-left so the user can tell sources apart.
+  final bool showOriginBadge;
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
+    final scheme = Theme.of(context).colorScheme;
     final f = item.file;
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Stack(
         fit: StackFit.expand,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(16),
             child: ColoredBox(
-              color: Colors.black12,
+              color: scheme.surfaceContainerHighest,
               child: f != null && item.isImage
                   ? Image.file(f, fit: BoxFit.cover)
                   : _AsyncThumb(
-                      loader: widget.thumbnailBytes, isVideo: item.isVideo),
+                      loader: thumbnailBytes, isVideo: item.isVideo),
             ),
           ),
-          if (item.isVideo)
-            const Center(
-              child: _PlayBadge(),
+          if (item.isVideo) const Center(child: _PlayBadge()),
+          if (showOriginBadge && _originLabel(item.origin) != null)
+            Positioned(
+              left: 6,
+              top: 6,
+              child: _OriginChip(label: _originLabel(item.origin)!),
             ),
-          if (widget.onDownload != null)
+          if (onSave != null)
             Positioned(
               right: 6,
               bottom: 6,
-              child: _DownloadButton(
-                busy: _downloading,
-                onTap: _handleDownload,
+              child: _SaveButton(
+                item: item,
+                onSave: onSave!,
+                onOverride: onSaveOverride,
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+String? _originLabel(StatusOrigin origin) {
+  switch (origin) {
+    case StatusOrigin.whatsapp:
+      return 'P';
+    case StatusOrigin.whatsappBusiness:
+      return 'B';
+    case StatusOrigin.imported:
+      return null;
+  }
+}
+
+class _OriginChip extends StatelessWidget {
+  const _OriginChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -104,17 +136,85 @@ class _PlayBadge extends StatelessWidget {
   }
 }
 
-class _DownloadButton extends StatelessWidget {
-  const _DownloadButton({required this.busy, required this.onTap});
+class _SaveButton extends StatefulWidget {
+  const _SaveButton({
+    required this.item,
+    required this.onSave,
+    required this.onOverride,
+  });
 
-  final bool busy;
-  final VoidCallback onTap;
+  final StatusItem item;
+  final Future<void> Function() onSave;
+  final Future<void> Function(SaveDestination override)? onOverride;
+
+  @override
+  State<_SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends State<_SaveButton> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() fn) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _showOverrideMenu() async {
+    final cb = widget.onOverride;
+    if (cb == null) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        box.localToGlobal(Offset.zero, ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final destination = await showMenu<SaveDestination>(
+      context: context,
+      position: position,
+      items: const [
+        PopupMenuItem(
+          value: SaveDestination.gallery,
+          child: Row(
+            children: [
+              Icon(Icons.photo_library_outlined),
+              SizedBox(width: 12),
+              Text('Save to gallery'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: SaveDestination.inApp,
+          child: Row(
+            children: [
+              Icon(Icons.bookmark_outline),
+              SizedBox(width: 12),
+              Text('Save in app'),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (destination != null) {
+      await _run(() => cb(destination));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: busy ? null : onTap,
+      onTap: _busy ? null : () => _run(widget.onSave),
+      onLongPress: widget.onOverride == null ? null : _showOverrideMenu,
       child: Container(
         width: 32,
         height: 32,
@@ -123,7 +223,7 @@ class _DownloadButton extends StatelessWidget {
           color: Colors.black54,
         ),
         alignment: Alignment.center,
-        child: busy
+        child: _busy
             ? const SizedBox(
                 width: 16,
                 height: 16,
@@ -133,7 +233,7 @@ class _DownloadButton extends StatelessWidget {
                 ),
               )
             : const Icon(
-                Icons.download_rounded,
+                Icons.save_alt_rounded,
                 color: Colors.white,
                 size: 20,
               ),

@@ -4,13 +4,24 @@ import 'package:provider/provider.dart';
 import '../../data/status_item.dart';
 import '../../services/download_action.dart';
 import '../../services/video_thumbs.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/status_tile.dart';
-import '../onboarding/onboarding_page.dart';
+import '../settings/settings_controller.dart';
+import '../settings/settings_page.dart';
 import '../viewer/viewer_page.dart';
 import 'recent_controller.dart';
 
+/// Recent statuses page.
+///
+/// Reused for three navigation roles:
+///   * Combined view (no [originFilter])
+///   * Personal-only destination ([originFilter] = whatsapp)
+///   * Business-only destination ([originFilter] = whatsappBusiness)
 class RecentPage extends StatefulWidget {
-  const RecentPage({super.key});
+  const RecentPage({super.key, this.originFilter, this.title});
+
+  final StatusOrigin? originFilter;
+  final String? title;
 
   @override
   State<RecentPage> createState() => _RecentPageState();
@@ -38,40 +49,34 @@ class _RecentPageState extends State<RecentPage>
   @override
   Widget build(BuildContext context) {
     final c = context.watch<RecentController>();
-    if (!c.ready) {
-      return const OnboardingPage();
-    }
+    final settings = context.watch<SettingsController>();
+    final filter = widget.originFilter;
+    final images = filter == null ? c.images : c.imagesFor(filter);
+    final videos = filter == null ? c.videos : c.videosFor(filter);
+    // Only show the per-tile origin badge in combined view when both
+    // instances are enabled — otherwise it's noise.
+    final showOriginBadge =
+        filter == null && settings.bothInstancesEnabled;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recent'),
+        title: Text(widget.title ?? 'Recent'),
         bottom: TabBar(
           controller: _tabs,
           tabs: const [Tab(text: 'Images'), Tab(text: 'Videos')],
         ),
         actions: [
-          if (!c.hasSecondarySetup)
-            IconButton(
-              icon: const Icon(Icons.add_business),
-              tooltip: 'Add WhatsApp Business',
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final ok = await context
-                    .read<RecentController>()
-                    .setupBusiness();
-                if (!ok) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Please pick the WhatsApp Business .Statuses folder',
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: c.loading ? null : c.refresh,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
           ),
         ],
       ),
@@ -80,8 +85,8 @@ class _RecentPageState extends State<RecentPage>
           : TabBarView(
               controller: _tabs,
               children: [
-                _RecentGrid(items: c.images),
-                _RecentGrid(items: c.videos),
+                _RecentGrid(items: images, showOriginBadge: showOriginBadge),
+                _RecentGrid(items: videos, showOriginBadge: showOriginBadge),
               ],
             ),
     );
@@ -89,30 +94,37 @@ class _RecentPageState extends State<RecentPage>
 }
 
 class _RecentGrid extends StatelessWidget {
-  const _RecentGrid({required this.items});
+  const _RecentGrid({required this.items, required this.showOriginBadge});
   final List<StatusItem> items;
+  final bool showOriginBadge;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.read<RecentController>();
     if (items.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'No recent statuses.\nOpen WhatsApp, view some statuses, then come back.',
-            textAlign: TextAlign.center,
-          ),
+      return RefreshIndicator(
+        onRefresh: c.refresh,
+        child: ListView(
+          children: const [
+            SizedBox(
+              height: 480,
+              child: EmptyState(
+                icon: Icons.update,
+                title: 'No statuses yet',
+                body: 'Open WhatsApp, view a few statuses, then pull to refresh.',
+              ),
+            ),
+          ],
         ),
       );
     }
-    final c = context.read<RecentController>();
     return RefreshIndicator(
       onRefresh: c.refresh,
       child: GridView.builder(
         padding: const EdgeInsets.all(8),
         itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 140,
           mainAxisSpacing: 6,
           crossAxisSpacing: 6,
         ),
@@ -120,8 +132,10 @@ class _RecentGrid extends StatelessWidget {
           final it = items[i];
           return StatusTile(
             item: it,
-            thumbnailBytes: () async =>
-                it.isVideo ? await VideoThumbs().forItem(it) : await c.readBytes(it),
+            showOriginBadge: showOriginBadge,
+            thumbnailBytes: () async => it.isVideo
+                ? await VideoThumbs().forItem(it)
+                : await c.readBytes(it),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => ViewerPage(
@@ -131,7 +145,9 @@ class _RecentGrid extends StatelessWidget {
                 ),
               ),
             ),
-            onDownload: () => downloadStatusItemToGallery(context, it),
+            onSave: () => saveStatusItem(context, it),
+            onSaveOverride: (override) =>
+                saveStatusItem(context, it, override: override),
           );
         },
       ),

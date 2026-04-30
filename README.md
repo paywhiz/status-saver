@@ -17,9 +17,12 @@ Built with Flutter. MIT licensed.
 - Share to other apps
 - Delete from Saved
 
-The following are **not** in v1 and are planned for later:
-repost-to-WhatsApp, background auto-save, dark mode toggle, multi-select bulk
-operations, text-status saver, direct-chat-without-saving-contact.
+## Roadmap
+
+A prioritized list of proposed features (multi-select, favorites, app lock,
+repost-detection, localization, etc.) lives in
+[`docs/future-features.md`](docs/future-features.md). Pick one up, link the
+PR back to its bullet, and remove the entry once shipped.
 
 ## Why is iOS different from Android?
 

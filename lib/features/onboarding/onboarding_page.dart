@@ -1,10 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/android_status_source.dart';
+import '../../data/status_repository.dart';
 import '../recent/recent_controller.dart';
+import '../settings/settings_controller.dart';
+import 'steps/destination_step.dart';
+import 'steps/done_step.dart';
+import 'steps/grant_step.dart';
+import 'steps/instances_step.dart';
+import 'steps/view_mode_step.dart';
+import 'steps/welcome_step.dart';
 
-/// Android first-run page: explains the SAF folder picker and triggers it.
-/// On iOS this page is never reached because the Recent tab is hidden.
+/// Multi-step first-run flow.
+///
+/// Steps (Android):
+///   1. Welcome
+///   2. Default save destination (gallery vs in-app)
+///   3. Which WhatsApp instances (personal / business / both)
+///   4. Grant SAF folder access for each chosen instance (sequential)
+///   5. Combined vs separate destinations (only when both granted)
+///   6. Done
+///
+/// On iOS the page is never shown (no SAF folder access; share-extension flow).
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
 
@@ -13,52 +31,86 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  bool _busy = false;
+  final _pc = PageController();
+
+  // Local state — only persisted to SettingsController on completion.
+  bool _personalSelected = true;
+  bool _businessSelected = false;
+
+  // Track which instances actually got their SAF permission granted, so the
+  // view-mode step is only shown when both are usable.
+  bool _personalGranted = false;
+  bool _businessGranted = false;
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  void _next() => _pc.nextPage(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+
+  Future<void> _finish() async {
+    final settings = context.read<SettingsController>();
+    await settings.setPersonalEnabled(_personalGranted && _personalSelected);
+    await settings.setBusinessEnabled(_businessGranted && _businessSelected);
+    await settings.setOnboardingCompleted(true);
+    if (mounted) {
+      await context.read<RecentController>().init();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final repo = context.read<StatusRepository>();
+    final android = repo is AndroidStatusSource ? repo : null;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Welcome')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            const Text(
-              'To show recent WhatsApp statuses, this app needs read access '
-              'to your WhatsApp .Statuses folder.',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Tap "Grant access" — the picker opens directly in the right '
-              'folder. Just tap "Use this folder" to confirm.',
-              style: TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 32),
-            FilledButton(
-              onPressed: _busy ? null : _grant,
-              child: const Text('Grant access'),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'After setup, you can also add WhatsApp Business statuses '
-              'from the Recent screen.',
-              style: TextStyle(color: Colors.black54, fontSize: 12),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text('Welcome'),
+        automaticallyImplyLeading: false,
+      ),
+      body: PageView(
+        controller: _pc,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          WelcomeStep(onNext: _next),
+          DestinationStep(onNext: _next),
+          InstancesStep(
+            personalSelected: _personalSelected,
+            businessSelected: _businessSelected,
+            onChanged: (p, b) => setState(() {
+              _personalSelected = p;
+              _businessSelected = b;
+            }),
+            onNext: _next,
+          ),
+          GrantStep(
+            personal: _personalSelected,
+            business: _businessSelected,
+            android: android,
+            onResult: ({required bool personalGranted, required bool businessGranted}) {
+              setState(() {
+                _personalGranted = personalGranted;
+                _businessGranted = businessGranted;
+              });
+              // Skip view-mode step if only one ended up granted.
+              if (personalGranted && businessGranted) {
+                _next();
+              } else {
+                _pc.animateToPage(5,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut);
+              }
+            },
+          ),
+          ViewModeStep(onNext: _next),
+          DoneStep(onFinish: _finish),
+        ],
       ),
     );
-  }
-
-  Future<void> _grant() async {
-    setState(() => _busy = true);
-    try {
-      await context.read<RecentController>().setup();
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 }

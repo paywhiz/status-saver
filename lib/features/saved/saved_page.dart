@@ -8,7 +8,10 @@ import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
 import '../../services/download_action.dart';
 import '../../services/video_thumbs.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/status_tile.dart';
+import '../settings/settings_controller.dart';
+import '../settings/settings_page.dart';
 import '../viewer/viewer_page.dart';
 import 'saved_controller.dart';
 
@@ -57,7 +60,15 @@ class _SavedPageState extends State<SavedPage>
             ),
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: c.loading ? null : c.refresh,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
           ),
         ],
       ),
@@ -74,18 +85,19 @@ class _SavedPageState extends State<SavedPage>
   }
 
   Future<void> _importFromFiles() async {
+    final store = context.read<SavedStore>();
+    final controller = context.read<SavedController>();
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       type: FileType.media,
     );
     if (result == null || result.files.isEmpty) return;
-    final store = SavedStore();
     for (final f in result.files) {
       final p = f.path;
       if (p == null) continue;
       await store.saveFile(source: File(p));
     }
-    if (mounted) await context.read<SavedController>().refresh();
+    if (mounted) await controller.refresh();
   }
 }
 
@@ -97,43 +109,57 @@ class _Grid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.read<SavedController>();
     if (items.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Nothing saved yet.\nView a status, then tap Save.',
-            textAlign: TextAlign.center,
-          ),
+      return RefreshIndicator(
+        onRefresh: c.refresh,
+        child: ListView(
+          children: const [
+            SizedBox(
+              height: 480,
+              child: EmptyState(
+                icon: Icons.bookmark_outline,
+                title: 'Nothing saved yet',
+                body: 'View a status, tap Save, and it\'ll appear here.',
+              ),
+            ),
+          ],
         ),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 6,
-        crossAxisSpacing: 6,
-      ),
-      itemBuilder: (context, i) {
-        final it = items[i];
-        return StatusTile(
-          item: it,
-          thumbnailBytes: () async =>
-              it.isVideo ? await VideoThumbs().forItem(it) : await it.file?.readAsBytes(),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ViewerPage(
-                items: items,
-                initialIndex: i,
-                source: source,
+    return RefreshIndicator(
+      onRefresh: c.refresh,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(8),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 140,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+        ),
+        itemBuilder: (context, i) {
+          final it = items[i];
+          return StatusTile(
+            item: it,
+            thumbnailBytes: () async => it.isVideo
+                ? await VideoThumbs().forItem(it)
+                : await it.file?.readAsBytes(),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ViewerPage(
+                  items: items,
+                  initialIndex: i,
+                  source: source,
+                ),
               ),
             ),
-          ),
-          onDownload: () => downloadStatusItemToGallery(context, it),
-        );
-      },
+            // From the Saved tab "save" implicitly means "to gallery" — the
+            // item is already in the in-app store.
+            onSave: () => saveStatusItem(context, it,
+                override: SaveDestination.gallery),
+          );
+        },
+      ),
     );
   }
 }
