@@ -137,6 +137,7 @@ class _Grid extends StatelessWidget {
       child: GridView.builder(
         padding: const EdgeInsets.all(8),
         itemCount: items.length,
+        cacheExtent: 1200,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 140,
           mainAxisSpacing: 6,

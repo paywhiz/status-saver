@@ -31,6 +31,24 @@ class GalleryAlbumSource {
         .toList(growable: false);
   }
 
+  /// Removes the underlying MediaStore row for [item]. On Android 11+ this
+  /// surfaces a system confirmation dialog before deleting; the future
+  /// resolves to true if the user confirmed and the row was removed.
+  Future<bool> delete(StatusItem item) async {
+    if (!Platform.isAndroid) return false;
+    final uri = item.uri;
+    if (uri == null) return false;
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'deleteGalleryItem',
+        {'uri': uri},
+      );
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   StatusItem? _toItem(Map row) {
     final uri = row['uri'] as String?;
     final name = row['name'] as String?;
