@@ -112,8 +112,13 @@ class MainActivity : FlutterActivity() {
             // Two-pass decode: bounds-only first to compute inSampleSize, then
             // decode downsampled. This avoids loading multi-megapixel WhatsApp
             // photos in full just to render a 140-px tile.
+            //
+            // The bounds pass intentionally returns null — that's how
+            // inJustDecodeBounds = true works; it only populates
+            // outWidth/outHeight on the Options. If the source can't be opened
+            // at all, the second decodeWith below returns null and we bail.
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            decodeWith(uriStr, path, bounds) ?: return null
+            decodeWith(uriStr, path, bounds)
             val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
             val src = decodeWith(uriStr, path, opts) ?: return null
