@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/status_item.dart';
 import '../features/settings/settings_controller.dart';
-import '../services/image_bytes_cache.dart';
+import '../services/image_thumbs.dart';
 import '../services/video_thumbs.dart';
 
 /// Square thumbnail tile used in both Recent and Saved grids.
@@ -37,7 +37,6 @@ class StatusTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final f = item.file;
     return GestureDetector(
       onTap: onTap,
       child: Stack(
@@ -47,14 +46,10 @@ class StatusTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             child: ColoredBox(
               color: scheme.surfaceContainerHighest,
-              child: f != null && item.isImage
-                  ? Image.file(
-                      f,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const _ThumbFallback(isVideo: false),
-                    )
-                  : _AsyncThumb(item: item),
+              // All tiles (images and videos) go through the persistent thumb
+              // cache so cold starts and re-scrolls don't trigger a fresh
+              // decode of the full-resolution source.
+              child: _AsyncThumb(item: item),
             ),
           ),
           if (item.isVideo) const Center(child: _PlayBadge()),
@@ -277,7 +272,7 @@ class _AsyncThumbState extends State<_AsyncThumb> {
   Future<Uint8List?> _load() {
     return widget.item.isVideo
         ? VideoThumbs().forItem(widget.item)
-        : ImageBytesCache().forItemThumb(widget.item);
+        : ImageThumbs().forItem(widget.item);
   }
 
   @override
@@ -286,11 +281,10 @@ class _AsyncThumbState extends State<_AsyncThumb> {
       future: _f,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Center(
-              child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2)));
+          // No spinner: the parent ColoredBox shows the dark tile background
+          // until bytes arrive, which is calmer than dozens of spinners on a
+          // cold start.
+          return const SizedBox.shrink();
         }
         final bytes = snap.data;
         if (bytes == null || bytes.isEmpty) {

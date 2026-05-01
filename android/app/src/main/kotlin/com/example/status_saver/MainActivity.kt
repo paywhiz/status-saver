@@ -1,8 +1,13 @@
 package com.example.status_saver
 
+import android.app.Activity
+import android.app.RecoverableSecurityException
 import android.content.ContentUris
+import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -18,6 +23,17 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val executor = Executors.newCachedThreadPool()
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // The MediaStore delete flow is asynchronous: createDeleteRequest returns an
+    // IntentSender that pops a system confirmation dialog, and the result lands
+    // in onActivityResult. We hold the pending channel result here so we can
+    // hand back true/false once the user confirms or cancels. Deletes are
+    // serialized in the UI (one viewer, one tap), so a single slot is enough.
+    private var pendingDeleteResult: MethodChannel.Result? = null
+
+    companion object {
+        private const val REQUEST_DELETE_GALLERY = 0xD117
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,6 +68,22 @@ class MainActivity : FlutterActivity() {
                             mainHandler.post { result.success(bytes) }
                         }
                     }
+                    "imageThumbnail" -> {
+                        val uriStr = call.argument<String>("uri")
+                        val path = call.argument<String>("path")
+                        val maxSize = call.argument<Int>("maxSize") ?: 384
+                        executor.execute {
+                            val bytes = extractImageThumbnail(uriStr, path, maxSize)
+                            mainHandler.post { result.success(bytes) }
+                        }
+                    }
+                    "deleteGalleryItem" -> {
+                        val uriStr = call.argument<String>("uri") ?: run {
+                            result.error("INVALID_URI", "URI is null", null)
+                            return@setMethodCallHandler
+                        }
+                        deleteGalleryItem(Uri.parse(uriStr), result)
+                    }
                     "isPackageInstalled" -> {
                         val pkg = call.argument<String>("package")
                         if (pkg == null) {
@@ -73,6 +105,129 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun extractImageThumbnail(uriStr: String?, path: String?, maxSize: Int): ByteArray? {
+        return try {
+            // Two-pass decode: bounds-only first to compute inSampleSize, then
+            // decode downsampled. This avoids loading multi-megapixel WhatsApp
+            // photos in full just to render a 140-px tile.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            decodeWith(uriStr, path, bounds) ?: return null
+            val sample = computeInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            val src = decodeWith(uriStr, path, opts) ?: return null
+            val scaled = scaleToBox(src, maxSize)
+            if (scaled !== src) src.recycle()
+            val baos = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+            scaled.recycle()
+            baos.toByteArray()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun decodeWith(
+        uriStr: String?,
+        path: String?,
+        opts: BitmapFactory.Options,
+    ): Bitmap? {
+        return when {
+            uriStr != null -> contentResolver.openInputStream(Uri.parse(uriStr))
+                ?.use { BitmapFactory.decodeStream(it, null, opts) }
+            path != null -> BitmapFactory.decodeFile(path, opts)
+            else -> null
+        }
+    }
+
+    private fun computeInSampleSize(srcW: Int, srcH: Int, maxSize: Int): Int {
+        if (srcW <= 0 || srcH <= 0) return 1
+        var sample = 1
+        var w = srcW
+        var h = srcH
+        while (w / 2 >= maxSize && h / 2 >= maxSize) {
+            w /= 2
+            h /= 2
+            sample *= 2
+        }
+        return sample
+    }
+
+    private fun deleteGalleryItem(uri: Uri, result: MethodChannel.Result) {
+        // Path 1: API < 29 — direct delete works if the app owns the row, which
+        // is the case for files we wrote via gal/MediaStore.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            executor.execute {
+                val rows = try {
+                    contentResolver.delete(uri, null, null)
+                } catch (_: Exception) {
+                    0
+                }
+                mainHandler.post { result.success(rows > 0) }
+            }
+            return
+        }
+
+        // Path 2: API 30+ — createDeleteRequest pops a system confirmation and
+        // returns success in onActivityResult. Even owned items go through this
+        // on R+ so the user always sees the confirmation.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val pi = MediaStore.createDeleteRequest(contentResolver, listOf(uri))
+                stashAndLaunch(pi.intentSender, result)
+            } catch (e: Exception) {
+                mainHandler.post { result.error("DELETE_FAILED", e.message, null) }
+            }
+            return
+        }
+
+        // Path 3: API 29 — try direct, fall back to the user-action IntentSender
+        // surfaced via RecoverableSecurityException.
+        executor.execute {
+            try {
+                val rows = contentResolver.delete(uri, null, null)
+                mainHandler.post { result.success(rows > 0) }
+            } catch (e: SecurityException) {
+                val sender = (e as? RecoverableSecurityException)
+                    ?.userAction?.actionIntent?.intentSender
+                if (sender != null) {
+                    mainHandler.post { stashAndLaunch(sender, result) }
+                } else {
+                    mainHandler.post { result.error("DELETE_FAILED", e.message, null) }
+                }
+            }
+        }
+    }
+
+    private fun stashAndLaunch(sender: IntentSender, result: MethodChannel.Result) {
+        // Replace any prior pending result (shouldn't happen in practice — UI
+        // serializes deletes — but if it does, drop the stale one cleanly).
+        pendingDeleteResult?.success(false)
+        pendingDeleteResult = result
+        try {
+            startIntentSenderForResult(
+                sender,
+                REQUEST_DELETE_GALLERY,
+                null,
+                0,
+                0,
+                0,
+            )
+        } catch (e: IntentSender.SendIntentException) {
+            pendingDeleteResult = null
+            result.error("DELETE_FAILED", e.message, null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_DELETE_GALLERY) {
+            val pending = pendingDeleteResult
+            pendingDeleteResult = null
+            pending?.success(resultCode == Activity.RESULT_OK)
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun extractThumbnail(uriStr: String?, path: String?, maxSize: Int): ByteArray? {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
 import '../../data/status_repository.dart';
+import '../../services/image_thumbs.dart';
 import '../../services/video_thumbs.dart';
 import '../settings/settings_controller.dart';
 
@@ -74,17 +75,19 @@ class RecentController extends ChangeNotifier {
     _items = await _repo.listRecent();
     _loading = false;
     notifyListeners();
-    _warmVideoThumbs();
+    _warmThumbs();
   }
 
-  /// Kicks off thumbnail decoding for the first batch of videos in the
+  /// Kicks off thumbnail decoding for the first batch of items in the
   /// background so the disk cache is warm by the time the user scrolls. The
-  /// thumbnail service de-dupes against grid tiles that ask for the same
-  /// frame, so this is cheap when both fire.
-  void _warmVideoThumbs() {
-    final videos = _items.where((i) => i.isVideo).take(16);
-    for (final v in videos) {
+  /// thumbnail services de-dupe against grid tiles that ask for the same key,
+  /// so this is cheap when both fire.
+  void _warmThumbs() {
+    for (final v in _items.where((i) => i.isVideo).take(16)) {
       unawaited(VideoThumbs().forItem(v));
+    }
+    for (final i in _items.where((i) => i.isImage).take(24)) {
+      unawaited(ImageThumbs().forItem(i));
     }
   }
 

@@ -33,8 +33,8 @@ class SavedController extends ChangeNotifier {
       _items.where((i) => i.isVideo).toList(growable: false);
 
   /// True when the Saved tab is reflecting the device gallery album rather
-  /// than the in-app store. Drives empty-state copy and disables in-app-only
-  /// actions like delete on Saved tiles.
+  /// than the in-app store. Drives empty-state copy and routes [remove]
+  /// through the native MediaStore delete instead of the in-app store.
   bool get sourceIsGallery =>
       _gallery != null &&
       _settings?.saveDestination == SaveDestination.gallery;
@@ -52,7 +52,13 @@ class SavedController extends ChangeNotifier {
   }
 
   Future<void> remove(StatusItem item) async {
-    if (sourceIsGallery) return;
+    if (sourceIsGallery) {
+      // Native delete shows a system confirmation on Android 11+; only refresh
+      // when the user confirmed (the platform returned true).
+      final ok = await _gallery!.delete(item);
+      if (ok) await refresh();
+      return;
+    }
     await _store.delete(item);
     await refresh();
   }

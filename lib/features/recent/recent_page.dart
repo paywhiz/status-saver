@@ -122,6 +122,11 @@ class _RecentGrid extends StatelessWidget {
       child: GridView.builder(
         padding: const EdgeInsets.all(8),
         itemCount: items.length,
+        // Default cacheExtent (~250 px) is too tight for a 3-column 140-px
+        // grid: tiles a single screen away get torn down and have to re-decode
+        // when the user scrolls back. 1200 keeps roughly the next two screens
+        // worth of tiles built so they stay warm.
+        cacheExtent: 1200,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 140,
           mainAxisSpacing: 6,

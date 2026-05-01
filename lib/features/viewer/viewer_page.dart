@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/saved_store.dart';
 import '../../data/status_item.dart';
 import '../../services/download_action.dart';
 import '../../services/share_service.dart';
@@ -156,9 +155,9 @@ class _ActionBarState extends State<_ActionBar> {
   @override
   Widget build(BuildContext context) {
     final isSaved = widget.source == ViewerSource.saved;
-    // Gallery-sourced items are content:// URIs (no real File). Delete via
-    // the in-app SavedStore doesn't apply, and the user's Save action is a
-    // no-op since the item is already in the gallery.
+    // Gallery-sourced items are content:// URIs (no real File). Save is a
+    // no-op since the item is already in the gallery; Delete still works,
+    // dispatched through SavedController.remove → native MediaStore delete.
     final isGalleryItem = isSaved && widget.item.file == null;
     final destination = context.watch<SettingsController>().saveDestination;
     final saveLabel = isSaved
@@ -184,7 +183,7 @@ class _ActionBarState extends State<_ActionBar> {
               label: 'Share',
               onTap: _busy ? null : _share,
             ),
-            if (isSaved && !isGalleryItem)
+            if (isSaved)
               _ActionButton(
                 icon: Icons.delete_outline,
                 label: 'Delete',
@@ -280,13 +279,14 @@ class _ActionBarState extends State<_ActionBar> {
   Future<void> _delete() async {
     setState(() => _busy = true);
     final savedCtrl = context.read<SavedController>();
-    final store = context.read<SavedStore>();
     try {
-      await store.delete(widget.item);
+      // Route through the controller so gallery deletes go through the native
+      // MediaStore confirmation dialog. Only dismiss the viewer if the item
+      // actually went away — the user can cancel the system dialog.
+      final before = savedCtrl.items.length;
+      await savedCtrl.remove(widget.item);
       if (!mounted) return;
-      await savedCtrl.refresh();
-      if (!mounted) return;
-      widget.onDeleted();
+      if (savedCtrl.items.length < before) widget.onDeleted();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
